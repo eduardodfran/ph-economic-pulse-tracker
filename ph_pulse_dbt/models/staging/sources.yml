@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: staging
+    database: zoomcamp-data-engineer-484608
+    schema: ph_economy_staging
+    tables:
+      - name: wfp_prices_raw
