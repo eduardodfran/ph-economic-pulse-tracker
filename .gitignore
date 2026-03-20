@@ -1,0 +1,36 @@
+# Python/virtualenv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.env
+
+# Airflow logs, DAGs, plugins (user-generated content)
+logs/
+dags/
+plugins/
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate*
+terraform/.terraform.lock.hcl
+
+# VS Code
+.vscode/
+
+# System files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Agent/IDE
+.agents/
+
+# Ignore backup and temp files
+*~
+*.swp
+*.swo
+
