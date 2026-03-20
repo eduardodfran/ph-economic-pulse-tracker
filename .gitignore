@@ -34,3 +34,8 @@ Desktop.ini
 *.swp
 *.swo
 
+# google_credentials.json (contains sensitive information)
+config/google_credentials.json
+
+# data (if you have any local data files that should not be committed)
+data/*
