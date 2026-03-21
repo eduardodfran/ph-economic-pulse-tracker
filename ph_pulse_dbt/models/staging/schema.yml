@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: stg_wfp_prices
+    description: 'Cleaned food price data from the WFP Philippines dataset.'
+    columns:
+      - name: price_date
+        description: 'The date the price was recorded.'
+        tests:
+          - not_null
+
+      - name: item_name
+        description: 'The specific food commodity (e.g., Rice, Eggs).'
+        tests:
+          - not_null
+
+      - name: price_php
+        description: 'The price in Philippine Pesos.'
+        tests:
+          - not_null
+
+      - name: currency_code
+        description: 'Should always be PHP for this dataset.'
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['php']
