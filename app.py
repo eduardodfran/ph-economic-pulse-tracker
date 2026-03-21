@@ -92,10 +92,11 @@ def render_correlation_chart(filtered_df: pd.DataFrame, region: str, item: str) 
 
     fig.add_trace(
         go.Scatter(
-            x=filtered_df["report_month"],
-            y=filtered_df["poverty_rate_pct"],
-            name="Poverty Rate (%)",
-            line=dict(dash="dash", color="red"),
+            x=filtered_df['report_month'], 
+            y=filtered_df['poverty_rate_pct'], 
+            name="Poverty Rate (%)", 
+            mode='markers',
+            marker=dict(color='red', size=10, symbol='diamond'),
         ),
         secondary_y=True,
     )
