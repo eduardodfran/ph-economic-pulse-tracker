@@ -9,7 +9,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOGGING_LEVEL: INFO
   volumes:
     - ./dags:/opt/airflow/dags
-    - ./ph_pulse_dbt/seeds:/opt/airflow/ph_pulse_dbt/seeds
+    - ./data:/opt/airflow/data
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./config/google_credentials.json:/opt/airflow/config/google_credentials.json
