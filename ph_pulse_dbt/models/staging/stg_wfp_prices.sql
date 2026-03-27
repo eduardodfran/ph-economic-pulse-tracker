@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
 with raw_data as (
-    select * from {{ source('staging', 'wfp_prices_raw') }}
+    select * from {{ source('staging', 'stg_wfp_prices') }}
 )
 
 select

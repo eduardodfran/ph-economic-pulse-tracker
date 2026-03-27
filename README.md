@@ -1,3 +1,5 @@
+![alt text](image-1.png)
+
 # PhilsPulse: National Economic Ingestion and Analytics Pipeline
 
 This repository tracks delivery of the PhilsPulse capstone project.

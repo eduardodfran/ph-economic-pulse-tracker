@@ -5,5 +5,9 @@ sources:
     database: zoomcamp-data-engineer-484608
     schema: ph_economy_staging
     tables:
-      - name: wfp_prices_raw
-      - name: poverty_phl_raw
+      - name: stg_wfp_prices
+        identifier: wfp_prices_raw
+      - name: stg_poverty
+        identifier: poverty_phl_raw
+      - name: stg_economy
+        identifier: economy_growth_raw

@@ -2,11 +2,11 @@
 
 with poverty_indicators as (
     select
-        cast(year as INT64) as report_year,
+        safe_cast(year as INT64) as report_year,
         indicator_code,
-        cast(value as FLOAT64) as indicator_value
-    from {{ source('staging', 'poverty_phl_raw') }}
-    where year >= 2000
+        safe_cast(value as FLOAT64) as indicator_value
+    from {{ source('staging', 'stg_poverty') }}
+    where safe_cast(year as INT64) >= 2000
       and country_iso3 = 'PHL'
       and indicator_code in ('SI.POV.NAHC', 'SI.POV.GINI')
 )
