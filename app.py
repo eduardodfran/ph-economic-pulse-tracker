@@ -138,34 +138,48 @@ def render_metrics(yearly_df: pd.DataFrame) -> None:
         st.warning("No data found for this region and time window.")
         return
 
+    import numpy as np
     start = yearly_df.iloc[0]
     end = yearly_df.iloc[-1]
 
+    def safe_display(val, fmt, na_val="N/A"):
+        if pd.isna(val) or (isinstance(val, float) and not np.isfinite(val)):
+            return na_val
+        try:
+            return fmt.format(val)
+        except Exception:
+            return na_val
+
     kamote_price_increase = safe_percent_change(start["kamote_price"], end["kamote_price"])
     poverty_decrease = safe_percent_change(start["poverty_rate_pct"], end["poverty_rate_pct"])
-    affordability_shift_ratio = (end["affordability_index"] / start["affordability_index"]) if start["affordability_index"] else 0.0
+    affordability_shift_ratio = (end["affordability_index"] / start["affordability_index"]) if start["affordability_index"] else np.nan
 
     metric_cols = st.columns(3)
 
     with metric_cols[0]:
         st.metric(
             "Total % Increase in Kamote Price",
-            f"{kamote_price_increase:+.1f}%",
-            delta=f"{format_money(end['kamote_price'])} vs {format_money(start['kamote_price'])}",
+            safe_display(kamote_price_increase, "{:+.1f}%", na_val="0%"),
+            delta=f"{safe_display(end['kamote_price'], '₱{:.2f}', 'N/A')} vs {safe_display(start['kamote_price'], '₱{:.2f}', 'N/A')}",
         )
 
     with metric_cols[1]:
         st.metric(
             "Total % Decrease in Poverty Incidence",
-            f"{abs(poverty_decrease):.1f}%",
-            delta=f"{end['poverty_rate_pct']:.1f}% today vs {start['poverty_rate_pct']:.1f}% in 2006",
+            safe_display(abs(poverty_decrease), "{:.1f}%", na_val="0%"),
+            delta=f"{safe_display(end['poverty_rate_pct'], '{:.1f}%', 'N/A')} today vs {safe_display(start['poverty_rate_pct'], '{:.1f}%', 'N/A')} in 2006",
         )
 
     with metric_cols[2]:
-        shift_delta = f"{((affordability_shift_ratio - 1) * 100):+.1f}% vs 2006" if affordability_shift_ratio else "No baseline"
+        if pd.isna(affordability_shift_ratio) or not np.isfinite(affordability_shift_ratio) or affordability_shift_ratio == 0:
+            shift_delta = "No baseline"
+            aff_val = "N/A"
+        else:
+            shift_delta = f"{((affordability_shift_ratio - 1) * 100):+.1f}% vs 2006"
+            aff_val = f"{affordability_shift_ratio:.2f}x"
         st.metric(
             "Affordability Shift",
-            f"{affordability_shift_ratio:.2f}x",
+            aff_val,
             delta=shift_delta,
         )
 
