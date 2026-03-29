@@ -8,8 +8,8 @@ terraform {
 }
 
 provider "google" {
-  project = "zoomcamp-data-engineer-484608" # Replace with your actual Project ID
-  region  = "asia-southeast1"    # Singapore is closest to Manila
+  project = var.project 
+  region  = var.region  
 }
 
 # 1. The Data Lake (GCS Bucket)
