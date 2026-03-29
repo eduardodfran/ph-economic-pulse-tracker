@@ -31,7 +31,7 @@ I implemented partitioning by year on the `fct_food_prices` table (partitioned b
 
 ```mermaid
 flowchart LR
-    WFP[WFP CSVs] --> Airflow[Airflow DAG]
+    Datasets --> Airflow[Airflow DAG]
     Airflow --> GCS[Google Cloud Storage]
     GCS --> BQ[BigQuery]
     BQ --> dbt[dbt]
