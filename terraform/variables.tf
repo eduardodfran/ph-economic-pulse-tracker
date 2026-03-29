@@ -1,6 +1,6 @@
 variable "project" {
   description = "Project ID"
-  default     = "your-project-id"
+  default     = "zoomcamp-data-engineer-484608"
 }
 
 variable "region" {

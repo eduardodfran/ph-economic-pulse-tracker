@@ -1,5 +1,3 @@
-![alt text](image-1.png)
-
 # PhilsPulse: National Economic Ingestion and Analytics Pipeline
 
 This repository tracks delivery of the PhilsPulse capstone project.
@@ -70,6 +68,8 @@ To run the Airflow DAGs in this project, reviewers must complete the following s
   - You can upload the JSON key file directly in the connection or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
 
 ### 2. Airflow Variables
+
+![alt text](image-3.png)
 
 Set the following Airflow Variables (Admin → Variables or via CLI):
 
@@ -215,21 +215,10 @@ If you want packages installed into the Airflow container, you can mount or copy
 
 If you want me to automatically add a simple Dockerfile or update `docker-compose.yaml` to install `airflow-requirements.txt` inside the Airflow service, tell me and I'll add that change.
 
-## Security / Credentials
+## Results
 
-- This repository previously contained a service account JSON at `config/google_credentials.json`. That file has been removed from the repository and replaced with a safe example: `config/google_credentials.json.example`.
-- DO NOT commit real service-account JSON files. Keep `config/google_credentials.json` listed in `.gitignore` (already configured).
-- After you deploy or rotate keys, create `config/google_credentials.json` locally (not committed) and point `GOOGLE_APPLICATION_CREDENTIALS` to it, or mount it into containers when running locally.
-- To remove sensitive files from Git history use a history rewrite tool such as `git filter-repo`. Example commands:
+![alt text](image-2.png)
+![alt text](image-4.png)
+![alt text](image-3.png)
 
-```bash
-# remove the file from the current index and commit
-git rm --cached config/google_credentials.json || true
-git commit -m "chore(security): remove committed service account key"
 
-# rewrite history (run only if you understand the implications)
-# pip install git-filter-repo
-# git filter-repo --path config/google_credentials.json --invert-paths
-```
-
-After rewriting history you should rotate any exposed credentials immediately. If you want, I can attempt a safe history scrub for you (it will rewrite commits and require a force-push).
