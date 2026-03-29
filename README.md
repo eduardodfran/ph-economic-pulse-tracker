@@ -107,6 +107,21 @@ docker compose up -d
 # visit http://localhost:8080 to view Airflow and trigger DAGs
 ```
 
+6. Configure Airflow variables
+
+The DAGs read a few configuration values from Airflow Variables so you can run the pipeline without editing code. Set these in the Airflow UI (`Admin -> Variables`) or via the CLI inside the Airflow webserver container:
+
+```bash
+# inside the workspace
+docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
+docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
+docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-economic-pulse-lake-eduardo
+```
+
+Use the same project/dataset names you provisioned with Terraform (or update the Terraform variables and re-run `terraform apply`).
+
+7. Run dbt (local development using seeds):
+
 6. Run dbt (local development using seeds):
 
 ```bash
