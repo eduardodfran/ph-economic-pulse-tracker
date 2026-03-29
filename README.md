@@ -58,6 +58,57 @@ Prerequisites
 - `gcloud` CLI authenticated to a service account with BigQuery & Storage roles (or use a service account JSON)
 - Docker & Docker Compose (for Airflow)
 
+## Airflow Setup Instructions
+
+To run the Airflow DAGs in this project, reviewers must complete the following setup steps:
+
+### 1. Airflow Connections
+
+- **google_cloud_default**:  
+   Create a connection in Airflow (Admin → Connections) named `google_cloud_default` of type "Google Cloud".
+  - Use a service account key with access to BigQuery and GCS.
+  - You can upload the JSON key file directly in the connection or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+
+### 2. Airflow Variables
+
+Set the following Airflow Variables (Admin → Variables or via CLI):
+
+| Variable Name   | Example Value                  | Description              |
+| --------------- | ------------------------------ | ------------------------ |
+| ph_bq_project   | your-gcp-project-id            | GCP project for BigQuery |
+| ph_bq_dataset   | ph_economy_staging             | BigQuery dataset         |
+| ph_bucket_name  | ph-economic-pulse-lake-eduardo | GCS bucket for raw data  |
+| ph_wfp_url      | (default provided, optional)   | WFP CSV URL              |
+| ph_poverty_url  | (default provided, optional)   | Poverty CSV URL          |
+| ph_economic_url | (default provided, optional)   | Economic growth CSV URL  |
+
+**Note:**  
+Even though defaults exist in the code, you must set these variables in Airflow for the DAGs to work reliably.
+
+Example CLI commands (run inside the Airflow container):
+
+```bash
+docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
+docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
+docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-economic-pulse-lake-eduardo
+```
+
+### 3. Google Cloud Credentials
+
+- Copy your service account key to `config/google_credentials.json` (do not commit this file).
+- Set the environment variable:
+  - On Linux/macOS:  
+     `export GOOGLE_APPLICATION_CREDENTIALS=config/google_credentials.json`
+  - On Windows PowerShell:  
+     `$env:GOOGLE_APPLICATION_CREDENTIALS = "config/google_credentials.json"`
+
+- The service account must have permissions for BigQuery and GCS.
+
+### 4. Documentation
+
+- All required variables and connection names are listed above.
+- See `config/google_credentials.json.example` for the expected credential file format.
+
 Quickstart (Linux/macOS)
 
 1. Create a Python virtual environment and install dependencies:
@@ -122,7 +173,7 @@ Use the same project/dataset names you provisioned with Terraform (or update the
 
 7. Run dbt (local development using seeds):
 
-6. Run dbt (local development using seeds):
+8. Run dbt (local development using seeds):
 
 ```bash
 cd ph_pulse_dbt
