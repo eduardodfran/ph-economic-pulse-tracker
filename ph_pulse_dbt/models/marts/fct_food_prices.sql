@@ -1,4 +1,11 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='table',
+    partition_by={
+        'field': 'report_month',
+        'data_type': 'date',
+        'granularity': 'year'
+    }
+) }}
 
 with monthly_prices as (
     select
