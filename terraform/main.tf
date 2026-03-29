@@ -8,19 +8,19 @@ terraform {
 }
 
 provider "google" {
-  project = "zoomcamp-data-engineer-484608" # Replace with your actual Project ID
-  region  = "asia-southeast1"    # Singapore is closest to Manila
+  project = var.project 
+  region  = var.region  
 }
 
 # 1. The Data Lake (GCS Bucket)
 resource "google_storage_bucket" "data_lake" {
-  name          = "ph-economic-pulse-lake-eduardo" # Must be globally unique
-  location      = "ASIA-SOUTHEAST1"
+  name          = var.bucket_name # Must be globally unique
+  location      = var.location
   force_destroy = true
 }
 
 # 2. The Data Warehouse (BigQuery Dataset)
 resource "google_bigquery_dataset" "dataset" {
-  dataset_id = "ph_economy_staging"
-  location   = "ASIA-SOUTHEAST1"
+  dataset_id = var.dataset_id
+  location   = var.location
 }

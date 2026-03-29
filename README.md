@@ -44,15 +44,192 @@ Although the data is historical, the pipeline is designed as a Batch Ingestion s
 
 ## How to Run (Reproducibility)
 
-To reproduce the full pipeline end-to-end:
+To make reproduction turnkey the repository includes a small set of helper files:
 
-1. **Provision Infrastructure:**
-   - `terraform apply` (in the `terraform/` directory) to set up GCP resources.
-2. **Start Services:**
-   - `docker-compose up` to launch Airflow and supporting services.
-3. **Build Data Models:**
-   - `dbt build` (in `ph_pulse_dbt/`) to transform and test data in BigQuery.
-4. **Launch Dashboard:**
-   - `streamlit run app.py` to start the interactive dashboard.
+- `requirements.txt` — Python packages for local development (dashboard + ingestion scripts)
+- `airflow-requirements.txt` — optional packages intended for the Airflow container
+- `ph_pulse_dbt/profiles.yml.template` — a dbt BigQuery profile template (copy to `~/.dbt/profiles.yml`)
+- `.env.example` — example environment variables to copy into `.env` or export in your shell
+- `Makefile` — convenience targets: `make infra`, `make up`, `make dbt-run`, `make dashboard`
 
-All steps are automated and reproducible for peer review.
+Prerequisites
+
+- Python 3.10+ and a virtualenv (optional but recommended)
+- `gcloud` CLI authenticated to a service account with BigQuery & Storage roles (or use a service account JSON)
+- Docker & Docker Compose (for Airflow)
+
+## Airflow Setup Instructions
+
+To run the Airflow DAGs in this project, reviewers must complete the following setup steps:
+
+### 1. Airflow Connections
+
+- **google_cloud_default**:  
+   Create a connection in Airflow (Admin → Connections) named `google_cloud_default` of type "Google Cloud".
+  - Use a service account key with access to BigQuery and GCS.
+  - You can upload the JSON key file directly in the connection or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+
+### 2. Airflow Variables
+
+Set the following Airflow Variables (Admin → Variables or via CLI):
+
+| Variable Name   | Example Value                  | Description              |
+| --------------- | ------------------------------ | ------------------------ |
+| ph_bq_project   | your-gcp-project-id            | GCP project for BigQuery |
+| ph_bq_dataset   | ph_economy_staging             | BigQuery dataset         |
+| ph_bucket_name  | ph-economic-pulse-lake-eduardo | GCS bucket for raw data  |
+| ph_wfp_url      | (default provided, optional)   | WFP CSV URL              |
+| ph_poverty_url  | (default provided, optional)   | Poverty CSV URL          |
+| ph_economic_url | (default provided, optional)   | Economic growth CSV URL  |
+
+**Note:**  
+Even though defaults exist in the code, you must set these variables in Airflow for the DAGs to work reliably.
+
+Example CLI commands (run inside the Airflow container):
+
+```bash
+docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
+docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
+docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-economic-pulse-lake-eduardo
+```
+
+### 3. Google Cloud Credentials
+
+- Copy your service account key to `config/google_credentials.json` (do not commit this file).
+- Set the environment variable:
+  - On Linux/macOS:  
+     `export GOOGLE_APPLICATION_CREDENTIALS=config/google_credentials.json`
+  - On Windows PowerShell:  
+     `$env:GOOGLE_APPLICATION_CREDENTIALS = "config/google_credentials.json"`
+
+- The service account must have permissions for BigQuery and GCS.
+
+### 4. Documentation
+
+- All required variables and connection names are listed above.
+- See `config/google_credentials.json.example` for the expected credential file format.
+
+Quickstart (Linux/macOS)
+
+1. Create a Python virtual environment and install dependencies:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+2. Provide credentials and environment variables (copy the example):
+
+```bash
+cp .env.example .env
+# edit .env and set GOOGLE_APPLICATION_CREDENTIALS and GCP_PROJECT
+export GOOGLE_APPLICATION_CREDENTIALS=/full/path/to/service-account.json
+export GCP_PROJECT=your-gcp-project-id
+export TF_VAR_project=$GCP_PROJECT
+export TF_VAR_region=asia-southeast1
+```
+
+3. Set up dbt profiles
+
+Copy the template to your dbt profiles location (default `~/.dbt`):
+
+```bash
+mkdir -p ~/.dbt
+cp ph_pulse_dbt/profiles.yml.template ~/.dbt/profiles.yml
+# Edit ~/.dbt/profiles.yml and confirm the values or rely on the env vars above
+```
+
+Alternatively, set `DBT_PROFILES_DIR` to point at `ph_pulse_dbt` and keep the template there.
+
+4. Provision infrastructure (optional):
+
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply -auto-approve
+```
+
+5. Start services (Airflow):
+
+```bash
+docker compose up -d
+# visit http://localhost:8080 to view Airflow and trigger DAGs
+```
+
+6. Configure Airflow variables
+
+The DAGs read a few configuration values from Airflow Variables so you can run the pipeline without editing code. Set these in the Airflow UI (`Admin -> Variables`) or via the CLI inside the Airflow webserver container:
+
+```bash
+# inside the workspace
+docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
+docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
+docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-economic-pulse-lake-eduardo
+```
+
+Use the same project/dataset names you provisioned with Terraform (or update the Terraform variables and re-run `terraform apply`).
+
+7. Run dbt (local development using seeds):
+
+8. Run dbt (local development using seeds):
+
+```bash
+cd ph_pulse_dbt
+# seed sample data for local runs and then build
+dbt seed --profiles-dir $(DBT_PROFILES_DIR)
+dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
+```
+
+7. Launch the Streamlit dashboard:
+
+```bash
+streamlit run app.py
+```
+
+Make shortcuts
+
+You can use the included Makefile (if `make` is available on your system):
+
+```bash
+make infra           # terraform init/plan/apply
+make up              # docker compose up -d
+make dbt-run         # dbt build (uses DBT_PROFILES_DIR if set)
+make dashboard       # run streamlit
+```
+
+Notes for Windows / PowerShell
+
+- Activate the venv with:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+# set environment variables using $env:NAME = 'value' or use a .env file loader
+```
+
+Airflow container
+
+If you want packages installed into the Airflow container, you can mount or copy `airflow-requirements.txt` into the image build process or pass it to the official Airflow image during initialization. See the Airflow image docs for details.
+
+If you want me to automatically add a simple Dockerfile or update `docker-compose.yaml` to install `airflow-requirements.txt` inside the Airflow service, tell me and I'll add that change.
+
+## Security / Credentials
+
+- This repository previously contained a service account JSON at `config/google_credentials.json`. That file has been removed from the repository and replaced with a safe example: `config/google_credentials.json.example`.
+- DO NOT commit real service-account JSON files. Keep `config/google_credentials.json` listed in `.gitignore` (already configured).
+- After you deploy or rotate keys, create `config/google_credentials.json` locally (not committed) and point `GOOGLE_APPLICATION_CREDENTIALS` to it, or mount it into containers when running locally.
+- To remove sensitive files from Git history use a history rewrite tool such as `git filter-repo`. Example commands:
+
+```bash
+# remove the file from the current index and commit
+git rm --cached config/google_credentials.json || true
+git commit -m "chore(security): remove committed service account key"
+
+# rewrite history (run only if you understand the implications)
+# pip install git-filter-repo
+# git filter-repo --path config/google_credentials.json --invert-paths
+```
+
+After rewriting history you should rotate any exposed credentials immediately. If you want, I can attempt a safe history scrub for you (it will rewrite commits and require a force-push).

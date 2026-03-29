@@ -1,3 +1,13 @@
+{{ config(
+    materialized='table',
+    partition_by={
+        'field': 'report_month',
+        'data_type': 'date',
+        'granularity': 'year'
+    },
+    cluster_by=["region"]
+ ) }}
+
 with food_prices as (
     select
         report_month,

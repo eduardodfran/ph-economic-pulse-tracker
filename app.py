@@ -83,6 +83,22 @@ def safe_percent_change(first_value: float, last_value: float) -> float:
     return ((last_value - first_value) / first_value) * 100
 
 
+def calculate_pct_change(current: float, baseline: float) -> float:
+    """Calculate percent change using (current - baseline) / baseline.
+
+    Returns 0.0 if baseline is None, zero, or NaN to avoid division-by-zero
+    and NaN display in the dashboard.
+    """
+    if baseline is None or baseline == 0 or pd.isna(baseline):
+        return 0.0
+    if pd.isna(current):
+        return 0.0
+    try:
+        return ((current - baseline) / baseline) * 100
+    except Exception:
+        return 0.0
+
+
 def build_yearly_view(df: pd.DataFrame, selected_region: str) -> pd.DataFrame:
     region_df = df[df["region"] == selected_region].copy()
     region_df = region_df[region_df["report_month"].dt.year >= 2006]
@@ -150,8 +166,8 @@ def render_metrics(yearly_df: pd.DataFrame) -> None:
         except Exception:
             return na_val
 
-    kamote_price_increase = safe_percent_change(start["kamote_price"], end["kamote_price"])
-    poverty_decrease = safe_percent_change(start["poverty_rate_pct"], end["poverty_rate_pct"])
+    kamote_price_increase = calculate_pct_change(end["kamote_price"], start["kamote_price"])
+    poverty_decrease = calculate_pct_change(end["poverty_rate_pct"], start["poverty_rate_pct"])
     affordability_shift_ratio = (end["affordability_index"] / start["affordability_index"]) if start["affordability_index"] else np.nan
 
     metric_cols = st.columns(3)
@@ -161,6 +177,7 @@ def render_metrics(yearly_df: pd.DataFrame) -> None:
             "Total % Increase in Kamote Price",
             safe_display(kamote_price_increase, "{:+.1f}%", na_val="0%"),
             delta=f"{safe_display(end['kamote_price'], '₱{:.2f}', 'N/A')} vs {safe_display(start['kamote_price'], '₱{:.2f}', 'N/A')}",
+            delta_color="inverse",
         )
 
     with metric_cols[1]:
@@ -224,9 +241,17 @@ def render_dual_axis_chart(yearly_df: pd.DataFrame, selected_region: str, metric
     fig.update_layout(
         template="plotly_dark",
         height=560,
-        margin=dict(l=20, r=20, t=40, b=20),
+        margin=dict(l=20, r=20, t=110, b=20),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.06,
+            xanchor="left",
+            x=0,
+            font=dict(size=11),
+            bgcolor="rgba(0,0,0,0)",
+        ),
         title=dict(text=f"{selected_region}: Kamote price vs net income", x=0.02),
     )
     fig.update_xaxes(title_text="Year")
@@ -284,7 +309,16 @@ def render_correlation_scatter(correlation_df: pd.DataFrame) -> None:
     fig.update_layout(
         template="plotly_dark",
         height=500,
-        margin=dict(l=20, r=20, t=30, b=20),
+        margin=dict(l=20, r=20, t=80, b=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.03,
+            xanchor="left",
+            x=0,
+            font=dict(size=11),
+            bgcolor="rgba(0,0,0,0)",
+        ),
         title=dict(text="Net income vs poverty incidence", x=0.02),
         xaxis_title="Net National Income (PHP)",
         yaxis_title="Poverty Incidence (%)",

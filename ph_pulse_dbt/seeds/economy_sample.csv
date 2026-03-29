@@ -1,0 +1,9 @@
+country_name,country_iso3,year,indicator_name,indicator_code,value
+Philippines,PHL,2016,Net national income per capita,NY.ADJ.NNTY.PC.CD,3034.5598
+Philippines,PHL,2017,Net national income per capita,NY.ADJ.NNTY.PC.CD,3086.4139
+Philippines,PHL,2018,Net national income per capita,NY.ADJ.NNTY.PC.CD,3200.7576
+Philippines,PHL,2019,Net national income per capita,NY.ADJ.NNTY.PC.CD,3391.1512
+Philippines,PHL,2006,Net national income per capita,NY.ADJ.NNTY.PC.CD,1500.0
+Philippines,PHL,2007,Net national income per capita,NY.ADJ.NNTY.PC.CD,1600.0
+Philippines,PHL,2016,Agriculture value added (% of GDP),NV.AGR.TOTL.ZS,10.5
+Philippines,PHL,2016,Population in slums (% of urban population),EN.POP.SLUM.UR.ZS,5.2

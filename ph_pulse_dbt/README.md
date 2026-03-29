@@ -36,15 +36,44 @@ Although the data is historical, the pipeline is designed as a Batch Ingestion s
 
 ## How to Run (Reproducibility)
 
-To reproduce the full pipeline end-to-end:
+This dbt project is configured to run against BigQuery. For local reproducibility we include a `profiles.yml` template and a short checklist.
 
-1. **Provision Infrastructure:**
-   - `terraform apply` (in the `terraform/` directory) to set up GCP resources.
-2. **Start Services:**
-   - `docker-compose up` to launch Airflow and supporting services.
-3. **Build Data Models:**
-   - `dbt build` (in `ph_pulse_dbt/`) to transform and test data in BigQuery.
-4. **Launch Dashboard:**
-   - `streamlit run app.py` to start the interactive dashboard.
+1. Install dbt and project dependencies (see top-level `requirements.txt`):
 
-All steps are automated and reproducible for peer review.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r ../requirements.txt
+pip install dbt-bigquery==1.11.1
+```
+
+2. Create your dbt profile
+
+Copy the provided template into your dbt profiles location (default `~/.dbt`):
+
+```bash
+mkdir -p ~/.dbt
+cp profiles.yml.template ~/.dbt/profiles.yml
+# Edit ~/.dbt/profiles.yml to confirm values, or rely on the env vars listed in .env.example
+```
+
+The template uses environment variables: set `GCP_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS`, and optionally `DBT_DATASET` or `GCP_REGION`.
+
+3. Optional: use local seeds for offline work
+
+```bash
+cd ph_pulse_dbt
+dbt seed --profiles-dir $(DBT_PROFILES_DIR)
+dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
+```
+
+4. Production run (against your live BigQuery dataset)
+
+```bash
+cd ph_pulse_dbt
+dbt build --profiles-dir $(DBT_PROFILES_DIR)
+```
+
+If you prefer not to copy `profiles.yml` to `~/.dbt`, set the `DBT_PROFILES_DIR` environment variable to point to this folder and dbt will use that profiles file.
+
+If you need help creating a service account for dbt with the minimum BigQuery permissions, I can add example IAM roles and a short walkthrough.

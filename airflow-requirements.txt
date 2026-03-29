@@ -1,0 +1,8 @@
+# Optional: packages to install into the Airflow worker/container environment
+# Installing Airflow from pip usually requires using the upstream constraints file.
+apache-airflow==2.7.1
+apache-airflow-providers-google==12.4.0
+google-cloud-storage==2.10.0
+google-cloud-bigquery==3.10.0
+pandas==2.2.3
+requests==2.31.0

@@ -1,8 +1,14 @@
 {{ config(materialized='view') }}
 
+{% if var('use_seed', false) %}
+with raw_data as (
+    select * from {{ ref('wfp_prices_sample') }}
+)
+{% else %}
 with raw_data as (
     select * from {{ source('staging', 'stg_wfp_prices') }}
 )
+{% endif %}
 
 select
     -- 1. Identifiers

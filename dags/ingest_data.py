@@ -14,10 +14,21 @@ import requests
 import io
 
 # Project Constants
-BUCKET_NAME = "ph-economic-pulse-lake-eduardo"
+# The DAG reads a few configuration values from Airflow Variables so deployments
+# can be customized through the Airflow UI or the CLI. Set these variables in
+# Admin -> Variables or via the `airflow variables` CLI inside your Airflow
+# container. See README for exact commands.
+# - ph_bq_project: BigQuery project id (e.g. my-gcp-project)
+# - ph_bq_dataset: BigQuery dataset id (e.g. ph_economy_staging)
+# - ph_bucket_name: GCS bucket name to write raw data to
+BUCKET_NAME = Variable.get("ph_bucket_name", default_var="ph-economic-pulse-lake-eduardo")
 WFP_URL = Variable.get("ph_wfp_url", default_var="https://data.humdata.org/dataset/ea251823-8694-47b4-82d0-7d27f00e8aba/resource/9a842d72-0d7d-4922-ad0e-eb8106c1ab0e/download/wfp_food_prices_phl.csv")
 POVERTY_URL = Variable.get("ph_poverty_url", default_var="https://data.humdata.org/dataset/c2840912-2adb-494b-8dc7-983166802b98/resource/10c50bf6-8310-47f3-bcdd-e33cc6bc7791/download/poverty_phl.csv")
 ECONOMIC_GROWTH_URL = Variable.get("ph_economic_url", default_var="https://data.humdata.org/dataset/ea251823-8694-47b4-82d0-7d27f00e8aba/resource/9a842d72-0d7d-4922-ad0e-eb8106c1ab0e/download/economy_growth_phl.csv")
+
+# BigQuery destination configuration (project and dataset can be set in Airflow)
+BQ_PROJECT = Variable.get("ph_bq_project", default_var="your-gcp-project-id")
+BQ_DATASET = Variable.get("ph_bq_dataset", default_var="ph_economy_staging")
 
 # Fallback path to bundled CSV in repo when remote source is unavailable
 LOCAL_ECONOMY_GROWTH_CSV = Path(__file__).resolve().parents[1] / "data" / "economy-and-growth_phl.csv"
@@ -92,7 +103,7 @@ with DAG(
         task_id="load_food_prices_to_bq",
         bucket=BUCKET_NAME,
         source_objects=["raw/wfp_food_prices.csv"],
-        destination_project_dataset_table="zoomcamp-data-engineer-484608.ph_economy_staging.wfp_prices_raw",
+        destination_project_dataset_table=f"{BQ_PROJECT}.{BQ_DATASET}.wfp_prices_raw",
         schema_fields=[
             {"name": "date", "type": "DATE", "mode": "NULLABLE"},
             {"name": "admin1", "type": "STRING", "mode": "NULLABLE"},
@@ -131,8 +142,15 @@ with DAG(
         task_id="load_poverty_to_bq",
         bucket=BUCKET_NAME,
         source_objects=["raw/poverty_phl.csv"],
-        destination_project_dataset_table="zoomcamp-data-engineer-484608.ph_economy_staging.poverty_phl_raw",
-        schema_fields=[],  # TODO: Add schema fields for poverty dataset
+        destination_project_dataset_table=f"{BQ_PROJECT}.{BQ_DATASET}.poverty_phl_raw",
+        schema_fields=[
+            {"name": "country_name", "type": "STRING", "mode": "NULLABLE"},
+            {"name": "country_iso3", "type": "STRING", "mode": "NULLABLE"},
+            {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},
+            {"name": "indicator_name", "type": "STRING", "mode": "NULLABLE"},
+            {"name": "indicator_code", "type": "STRING", "mode": "NULLABLE"},
+            {"name": "value", "type": "FLOAT", "mode": "NULLABLE"},
+        ],
         write_disposition="WRITE_TRUNCATE",
         skip_leading_rows=1,
         source_format="CSV",
@@ -157,7 +175,7 @@ with DAG(
         task_id="load_economy_to_bq",
         bucket=BUCKET_NAME,
         source_objects=["raw/economy_growth.csv"],
-        destination_project_dataset_table="zoomcamp-data-engineer-484608.ph_economy_staging.economy_growth_raw",
+        destination_project_dataset_table=f"{BQ_PROJECT}.{BQ_DATASET}.economy_growth_raw",
         autodetect=True, # Let BigQuery guess the schema first
         write_disposition="WRITE_TRUNCATE", # Overwrite every time we run
         source_format="CSV",
