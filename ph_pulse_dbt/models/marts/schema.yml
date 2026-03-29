@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: fct_food_prices
+    description: 'Monthly aggregated food prices (one row per region/item/month).'
+    columns:
+      - name: report_month
+        tests:
+          - not_null
+      - name: region
+        tests:
+          - not_null
+      - name: item_name
+        tests:
+          - not_null
+
+  - name: fct_economic_pulse
+    description: 'Master mart joining food prices with economic context and poverty stats.'
+    columns:
+      - name: report_month
+        tests:
+          - not_null
+      - name: report_year
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_economic_correlation')
+                field: report_year
+      - name: region
+        tests:
+          - not_null
+      - name: poverty_rate_pct
+        # poverty_rate_pct may be unavailable for some years/regions; not enforced as not_null in tests
+      - name: gini_index
+        # gini_index may be unavailable for some years/regions; not enforced as not_null in tests
+
+  - name: fct_economic_correlation
+    description: 'Year-level economics table used for correlation and scatter plots.'
+    columns:
+      - name: report_year
+        tests:
+          - not_null
+          - unique
+      - name: net_income_per_capita
+        description: 'Annual net income per capita; may be NULL for years with missing source data.'

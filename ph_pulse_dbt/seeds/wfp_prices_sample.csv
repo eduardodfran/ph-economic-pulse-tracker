@@ -1,0 +1,4 @@
+date,admin1,market,category,commodity,price,usdprice,unit,pricetype,currency
+2006-01-01,Autonomous Region in Muslim Mindanao,Market A,vegetables,Sweet potato (kamote),20,0.4,kg,retail,PHP
+2007-01-01,Autonomous Region in Muslim Mindanao,Market A,vegetables,Sweet potato (kamote),21,0.42,kg,retail,PHP
+2016-01-01,Autonomous Region in Muslim Mindanao,Market B,vegetables,Sweet potato (kamote),40,0.9,kg,retail,PHP

@@ -12,7 +12,8 @@ x-airflow-common: &airflow-common
     - ./data:/opt/airflow/data
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
-    - ./config/google_credentials.json:/opt/airflow/config/google_credentials.json
+    # Placeholder credential mapping. Replace the example with your real key locally as needed.
+    - ./config/google_credentials.json.example:/opt/airflow/config/google_credentials.json
   user: '${AIRFLOW_UID:-50000}:0'
   depends_on:
     postgres:

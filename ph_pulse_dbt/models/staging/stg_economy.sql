@@ -1,5 +1,17 @@
 {{ config(materialized='view') }}
 
+{% if var('use_seed', false) %}
+with raw_economy as (
+    select
+        country_name,
+        country_iso3,
+        safe_cast(year as int64) as year,
+        indicator_name,
+        indicator_code,
+        safe_cast(value as float64) as value
+    from {{ ref('economy_sample') }}
+)
+{% else %}
 with raw_economy as (
     select
         country_name,
@@ -10,6 +22,7 @@ with raw_economy as (
         safe_cast(value as float64) as value
     from {{ source('staging', 'stg_economy') }}
 )
+{% endif %}
 
 select
     year,

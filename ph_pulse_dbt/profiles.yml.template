@@ -1,0 +1,16 @@
+# dbt BigQuery profiles.yml template for ph_pulse_dbt
+# Copy this file to ~/.dbt/profiles.yml or set DBT_PROFILES_DIR to the containing folder.
+
+ph_pulse_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      # Prefer using environment variables for credentials and project
+      project: "{{ env_var('GCP_PROJECT') }}"
+      dataset: "{{ env_var('DBT_DATASET', 'ph_economy_staging') }}"
+      threads: 4
+      keyfile: "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
+      timeout_seconds: 300
+      location: "{{ env_var('GCP_REGION', 'asia-southeast1') }}"

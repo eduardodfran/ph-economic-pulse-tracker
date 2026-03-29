@@ -1,5 +1,17 @@
 {{ config(materialized='view') }}
 
+{% if var('use_seed', false) %}
+with poverty_indicators as (
+    select
+        safe_cast(year as INT64) as report_year,
+        indicator_code,
+        safe_cast(value as FLOAT64) as indicator_value
+    from {{ ref('poverty_sample') }}
+    where safe_cast(year as INT64) >= 2000
+      and country_iso3 = 'PHL'
+      and indicator_code in ('SI.POV.NAHC', 'SI.POV.GINI')
+)
+{% else %}
 with poverty_indicators as (
     select
         safe_cast(year as INT64) as report_year,
@@ -10,6 +22,7 @@ with poverty_indicators as (
       and country_iso3 = 'PHL'
       and indicator_code in ('SI.POV.NAHC', 'SI.POV.GINI')
 )
+{% endif %}
 
 select
     report_year,

@@ -1,13 +1,25 @@
 {{ config(materialized='view') }}
 
-WITH base_econ AS (
-    SELECT 
+{% if var('use_seed', false) %}
+with base_econ as (
+    select
+        year,
+        indicator_code,
+        value,
+        country_iso3
+    from {{ ref('economy_sample') }}
+    where country_iso3 = 'PHL'
+)
+{% else %}
+with base_econ as (
+    select
         year,
         indicator_code,
         value
-    FROM {{ source('staging', 'stg_economy') }}
-    WHERE country_iso3 = 'PHL'
+    from {{ source('staging', 'stg_economy') }}
+    where country_iso3 = 'PHL'
 )
+{% endif %}
 
 SELECT
     year,

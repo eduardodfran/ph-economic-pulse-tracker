@@ -1,0 +1,10 @@
+# Minimal, reproducible Python dependencies for local development (dashboard + ingestion scripts)
+pandas==2.2.3
+streamlit==1.29.0
+plotly==5.15.0
+requests==2.31.0
+google-cloud-bigquery==3.10.0
+google-cloud-storage==2.10.0
+dbt-bigquery==1.11.1
+pyarrow==12.0.1
+python-dateutil==2.8.2
