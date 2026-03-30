@@ -305,6 +305,10 @@ cd ..
 streamlit run app.py
 ```
 
+#### Deployed Streamlit Dashboard:
+
+- Deployed dashboard: https://ph-economic-pulse-tracker.streamlit.app/
+
 Dashboard screenshots:
 
 ![Overview](images/db-overview.png)
