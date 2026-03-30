@@ -363,7 +363,7 @@ def poverty_page(_client=None):
 
 def economy_page(_client=None):
     st.title("Economic Growth")
-    st.caption("Multi-metric trend view with growth context and less noise.")
+    st.caption("Indicator-focused view that avoids mixed-series spikes and invalid KPI rows.")
 
     econ_df = load_economic(_client)
     if econ_df.empty:
@@ -375,57 +375,144 @@ def economy_page(_client=None):
         st.error("Could not infer year column for economy data.")
         return
 
+    indicator_col = _pick_column(econ_df, ["indicator_name", "indicator", "indicator_code"], fallback_index=3)
+    value_col = _pick_column(econ_df, ["value"], fallback_index=5)
+
     df = econ_df.copy()
     df[year_col] = pd.to_numeric(df[year_col], errors="coerce")
-    df = df.dropna(subset=[year_col])
+    current_year = pd.Timestamp.today().year
 
+    st.sidebar.subheader("Economy Filters")
+    exclude_non_positive = st.sidebar.checkbox("Exclude zero/negative values", value=True)
+    chart_style = st.sidebar.radio("Chart style", ["Bar", "Line"], index=0, horizontal=True)
+
+    # Preferred handling for World Bank long-format data
+    if indicator_col in df.columns and value_col in df.columns:
+        df[value_col] = pd.to_numeric(df[value_col], errors="coerce")
+        df = df.dropna(subset=[year_col, value_col, indicator_col])
+        df = df[(df[year_col] >= 1960) & (df[year_col] <= current_year)]
+        if exclude_non_positive:
+            df = df[df[value_col] > 0]
+
+        if df.empty:
+            st.warning("No valid economic rows remain after cleaning filters.")
+            return
+
+        indicators = sorted(df[indicator_col].astype(str).unique().tolist())
+        selected_indicator = st.sidebar.selectbox("Indicator", indicators)
+
+        df_filtered = (
+            df[df[indicator_col] == selected_indicator]
+            .groupby(year_col, observed=True)[value_col]
+            .mean()
+            .reset_index()
+            .sort_values(year_col)
+        )
+
+        if df_filtered.empty:
+            st.warning("No rows for the selected indicator.")
+            return
+
+        if chart_style == "Bar":
+            fig = px.bar(
+                df_filtered,
+                x=year_col,
+                y=value_col,
+                labels={year_col: "Year", value_col: "Value"},
+                title=f"{selected_indicator} by Year",
+            )
+        else:
+            fig = px.line(
+                df_filtered,
+                x=year_col,
+                y=value_col,
+                markers=True,
+                labels={year_col: "Year", value_col: "Value"},
+                title=f"{selected_indicator} by Year",
+            )
+            fig.update_traces(line=dict(width=2))
+        st.plotly_chart(fig, use_container_width=True)
+
+        latest_year = int(df_filtered[year_col].max())
+        latest_val = float(df_filtered[df_filtered[year_col] == latest_year][value_col].iloc[-1])
+        first_year = int(df_filtered[year_col].min())
+        first_val = float(df_filtered[df_filtered[year_col] == first_year][value_col].iloc[0])
+        growth_pct = _safe_pct_change(latest_val, first_val)
+
+        kpi_cols = st.columns(4)
+        with kpi_cols[0]:
+            st.metric("Latest", f"{latest_val:,.2f}")
+        with kpi_cols[1]:
+            st.metric("Latest Year", f"{latest_year}")
+        with kpi_cols[2]:
+            st.metric("Since First Year", f"{growth_pct:+.1f}%")
+        with kpi_cols[3]:
+            st.metric("Years Covered", f"{df_filtered[year_col].nunique()}")
+
+        with st.expander("Show cleaned economic dataset"):
+            st.dataframe(df_filtered, use_container_width=True)
+
+        return
+
+    # Fallback for wide-format economy tables
     numeric_cols = [c for c in df.select_dtypes(include="number").columns if c != year_col]
     if not numeric_cols:
         st.error("No numeric economic metrics available.")
         return
 
-    st.sidebar.subheader("Economy Filters")
-    selected_metric = st.sidebar.selectbox("Primary Metric", numeric_cols, index=0)
-    compare_metric = st.sidebar.selectbox("Compare Metric (optional)", ["None"] + numeric_cols, index=0)
+    selected_metric = st.sidebar.selectbox("Metric", numeric_cols, index=0)
+    trend_df = df[[year_col, selected_metric]].dropna().sort_values(year_col)
+    trend_df = trend_df[(trend_df[year_col] >= 1960) & (trend_df[year_col] <= current_year)]
+    if exclude_non_positive:
+        trend_df = trend_df[trend_df[selected_metric] > 0]
 
-    trend_cols = [selected_metric] + ([compare_metric] if compare_metric != "None" and compare_metric != selected_metric else [])
-    trend_df = df[[year_col] + trend_cols].sort_values(year_col)
+    if trend_df.empty:
+        st.warning("No valid metric rows remain after cleaning filters.")
+        return
 
-    chart_df = trend_df.melt(
-        id_vars=[year_col],
-        value_vars=trend_cols,
-        var_name="metric",
-        value_name="metric_value",
-    )
-    fig = px.line(
-        chart_df,
-        x=year_col,
-        y="metric_value",
-        color="metric",
-        markers=True,
-        labels={year_col: "Year", "metric_value": "Value", "metric": "Metric"},
-        title="Economic Metric Trends",
-    )
-    fig.update_traces(line=dict(width=2))
+    if chart_style == "Bar":
+        fig = px.bar(
+            trend_df,
+            x=year_col,
+            y=selected_metric,
+            labels={year_col: "Year", selected_metric: "Value"},
+            title=f"{selected_metric} by Year",
+        )
+    else:
+        fig = px.line(
+            trend_df,
+            x=year_col,
+            y=selected_metric,
+            markers=True,
+            labels={year_col: "Year", selected_metric: "Value"},
+            title=f"{selected_metric} by Year",
+        )
+        fig.update_traces(line=dict(width=2))
     st.plotly_chart(fig, use_container_width=True)
 
-    primary = trend_df[[year_col, selected_metric]].dropna()
-    if not primary.empty:
-        latest_val = primary[selected_metric].iloc[-1]
-        first_val = primary[selected_metric].iloc[0]
-        growth_pct = _safe_pct_change(latest_val, first_val)
-        kpi_cols = st.columns(3)
-        with kpi_cols[0]:
-            st.metric("Latest", f"{latest_val:,.2f}")
-        with kpi_cols[1]:
-            st.metric("Since First Year", f"{growth_pct:+.1f}%")
-        with kpi_cols[2]:
-            st.metric("Years Covered", f"{primary[year_col].nunique()}")
+    latest_val = float(trend_df[selected_metric].iloc[-1])
+    first_val = float(trend_df[selected_metric].iloc[0])
+    growth_pct = _safe_pct_change(latest_val, first_val)
+    kpi_cols = st.columns(3)
+    with kpi_cols[0]:
+        st.metric("Latest", f"{latest_val:,.2f}")
+    with kpi_cols[1]:
+        st.metric("Since First Year", f"{growth_pct:+.1f}%")
+    with kpi_cols[2]:
+        st.metric("Years Covered", f"{trend_df[year_col].nunique()}")
 
 
 def cross_dataset_page(_client=None):
     st.title("Cross-dataset Analysis")
     st.caption("Compare food prices, poverty, and economy with clearer options for single or multiple food commodities.")
+
+    label_map = {
+        "Annualized average growth rate in per capita real survey mean consumption or income, total population (%)": "Avg Growth (Total)",
+        "Annualized average growth rate in per capita real survey mean consumption or income, bottom 40% of population (%)": "Avg Growth (Bottom 40%)",
+        "Proportion of people living below 50 percent of median income (%)": "Below 50% Median Income (%)",
+        "Income share held by fourth 20%": "Income Share 4th 20%",
+        "Gini index": "Gini Index",
+    }
 
     food_df = load_food_prices(_client)
     pov_df = load_poverty(_client)
@@ -443,6 +530,8 @@ def cross_dataset_page(_client=None):
     pov_value_col = _pick_column(pov_df, ["value", "poverty_rate_pct", "poverty_rate"])
     pov_indicator_col = _pick_column(pov_df, ["indicator_name", "indicator", "indicator_code"], fallback_index=3)
     econ_year_col = _pick_column(econ_df, ["year", "report_year", "date"], fallback_index=0)
+    econ_indicator_col = _pick_column(econ_df, ["indicator_name", "indicator", "indicator_code"], fallback_index=3)
+    econ_value_col = _pick_column(econ_df, ["value"], fallback_index=5)
 
     if None in [pov_year_col, pov_value_col, pov_indicator_col, econ_year_col]:
         st.warning("Could not infer columns for poverty/economy cross-analysis.")
@@ -462,10 +551,15 @@ def cross_dataset_page(_client=None):
     econ = econ_df.copy()
     econ[econ_year_col] = pd.to_numeric(econ[econ_year_col], errors="coerce")
     econ = econ.dropna(subset=[econ_year_col])
-    econ_numeric_cols = [c for c in econ.select_dtypes(include="number").columns if c != econ_year_col]
-    if not econ_numeric_cols:
-        st.warning("No numeric economy metric available for cross analysis.")
-        return
+    econ_long_format = (econ_indicator_col in econ.columns) and (econ_value_col in econ.columns)
+    if econ_long_format:
+        econ[econ_value_col] = pd.to_numeric(econ[econ_value_col], errors="coerce")
+        econ = econ.dropna(subset=[econ_value_col, econ_indicator_col])
+    else:
+        econ_numeric_cols = [c for c in econ.select_dtypes(include="number").columns if c != econ_year_col]
+        if not econ_numeric_cols:
+            st.warning("No numeric economy metric available for cross analysis.")
+            return
 
     st.sidebar.subheader("Cross-analysis Filters")
     food_mode = st.sidebar.radio(
@@ -491,8 +585,23 @@ def cross_dataset_page(_client=None):
             st.info("Select at least one food commodity.")
             return
 
-    poverty_choice = st.sidebar.selectbox("Poverty indicator", sorted(pov[pov_indicator_col].astype(str).unique().tolist()))
-    econ_choice = st.sidebar.selectbox("Economy metric", econ_numeric_cols)
+    poverty_options = sorted(pov[pov_indicator_col].astype(str).unique().tolist())
+    poverty_choice = st.sidebar.selectbox(
+        "Poverty indicator",
+        poverty_options,
+        format_func=lambda x: label_map.get(x, x if len(x) <= 48 else f"{x[:45]}..."),
+    )
+    st.sidebar.caption("Tip: pick Gini Index or Income Share 4th 20% for denser yearly coverage.")
+
+    if econ_long_format:
+        econ_options = sorted(econ[econ_indicator_col].astype(str).unique().tolist())
+        econ_choice = st.sidebar.selectbox(
+            "Economy indicator",
+            econ_options,
+            format_func=lambda x: label_map.get(x, x if len(x) <= 48 else f"{x[:45]}..."),
+        )
+    else:
+        econ_choice = st.sidebar.selectbox("Economy metric", econ_numeric_cols)
     value_mode = st.sidebar.radio("Display mode", ["Indexed (Base=100)", "Raw values"], index=0)
     year_alignment = st.sidebar.radio(
         "Year alignment",
@@ -548,17 +657,40 @@ def cross_dataset_page(_client=None):
         .reset_index()
         .rename(columns={pov_year_col: "year", pov_value_col: "poverty_value"})
     )
-    econ_series = (
-        econ.groupby(econ_year_col, observed=True)[econ_choice]
-        .mean()
-        .reset_index()
-        .rename(columns={econ_year_col: "year", econ_choice: "economy_value"})
-    )
+    if econ_long_format:
+        econ_series = (
+            econ[econ[econ_indicator_col] == econ_choice]
+            .groupby(econ_year_col, observed=True)[econ_value_col]
+            .mean()
+            .reset_index()
+            .rename(columns={econ_year_col: "year", econ_value_col: "economy_value"})
+        )
+    else:
+        econ_series = (
+            econ.groupby(econ_year_col, observed=True)[econ_choice]
+            .mean()
+            .reset_index()
+            .rename(columns={econ_year_col: "year", econ_choice: "economy_value"})
+        )
 
-    poverty_series_name = f"Poverty: {poverty_choice}"
-    economy_series_name = f"Economy: {econ_choice}"
+    poverty_series_name = f"Poverty: {label_map.get(poverty_choice, poverty_choice)}"
+    economy_series_name = f"Economy: {label_map.get(econ_choice, econ_choice)}"
     pov_series = pov_series.rename(columns={"poverty_value": poverty_series_name})
     econ_series = econ_series.rename(columns={"economy_value": economy_series_name})
+
+    # Fill poverty survey gaps forward so yearly comparisons/correlations are less sparse.
+    year_candidates = pd.concat(
+        [
+            food_series[["year"]],
+            econ_series[["year"]],
+        ],
+        ignore_index=True,
+    ).dropna()
+    if not year_candidates.empty:
+        year_candidates = year_candidates["year"].astype(int)
+        full_years = pd.DataFrame({"year": range(int(year_candidates.min()), int(year_candidates.max()) + 1)})
+        pov_series = full_years.merge(pov_series, on="year", how="left").sort_values("year")
+        pov_series[poverty_series_name] = pov_series[poverty_series_name].ffill()
 
     join_type = "outer" if year_alignment == "Use full timeline" else "inner"
     merged = food_series.merge(pov_series, on="year", how=join_type).merge(econ_series, on="year", how=join_type)
@@ -607,6 +739,17 @@ def cross_dataset_page(_client=None):
         title="Cross-dataset Trend Comparison",
     )
     idx_fig.update_traces(line=dict(width=2.5))
+    idx_fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.22,
+            xanchor="left",
+            x=0,
+            title=None,
+        ),
+        margin=dict(b=120),
+    )
     st.plotly_chart(idx_fig, use_container_width=True)
 
     # Correlation uses complete-case rows to avoid misleading values from missing years.
