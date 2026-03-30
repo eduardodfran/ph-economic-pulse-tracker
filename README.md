@@ -86,6 +86,14 @@ python -m venv .venv
 pip install -r pipeline-requirements.txt
 ```
 
+![alt text](images/bigquery.png)
+
+Data Warehouse Implementation: Final fct_food_prices table in BigQuery. The data is partitioned by month for query optimization and contains ~69k processed records representing the final output of the dbt transformation layer.
+
+![alt text](images/bucket.png)
+
+Data Lake (GCS) Storage: Raw data files successfully ingested into Google Cloud Storage via Airflow. This landing zone serves as the source for the BigQuery external tables and subsequent dbt transformations.
+
 ### 3. Configure GCP authentication and local env vars
 
 1. Create a service account with BigQuery + GCS permissions (minimum: BigQuery Data Editor, BigQuery Job User, Storage Admin).
@@ -284,6 +292,8 @@ bq query --use_legacy_sql=false 'SELECT COUNT(*) AS rows FROM `your-gcp-project-
 ```
 
 ### 10. Optional: run dbt transformations locally
+
+![alt text](images/dbt-graph.png)
 
 Set up profile:
 
