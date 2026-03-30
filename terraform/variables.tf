@@ -1,6 +1,5 @@
 variable "project" {
-  description = "Project ID"
-  default     = "zoomcamp-data-engineer-484608"
+  description = "GCP Project ID (required; no default to avoid accidental provisioning)"
 }
 
 variable "region" {

@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and replace placeholder values.
+# Example (PowerShell): Copy-Item terraform.tfvars.example terraform.tfvars
+
+# REQUIRED: set your own GCP project id
+project = "your-gcp-project-id"
+
+# Optional overrides
+region      = "us-central1"
+location    = "ASIA-SOUTHEAST1"
+bucket_name = "your-unique-gcs-bucket-name"
+dataset_id  = "ph_economy_staging"
