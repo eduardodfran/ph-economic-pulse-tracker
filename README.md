@@ -4,6 +4,10 @@ This repository tracks delivery of the PhilsPulse capstone project.
 
 Project framing and dataset scope are documented in [docs/project-charter.md](docs/project-charter.md).
 
+#### Deployed Streamlit Dashboard:
+
+- Deployed dashboard: https://ph-economic-pulse-tracker.streamlit.app/
+
 ## Official Dataset Sources (HDX)
 
 The project uses these three datasets as the official source pages:
