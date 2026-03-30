@@ -1,4 +1,6 @@
 import os
+import json
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -47,7 +49,24 @@ def _bigquery_client() -> Optional[object]:
     try:
         from google.cloud import bigquery
 
-        os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", str(BASE_DIR / "config" / "google_credentials.json"))
+        # Support Streamlit Cloud secrets: either store the full JSON string in
+        # `gcp_service_account_json` or the object in `gcp_service_account`.
+        # If present, write a temporary JSON file and point GOOGLE_APPLICATION_CREDENTIALS to it.
+        try:
+            if "gcp_service_account_json" in st.secrets:
+                with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as f:
+                    f.write(st.secrets["gcp_service_account_json"])
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
+            elif "gcp_service_account" in st.secrets:
+                with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".json") as f:
+                    json.dump(dict(st.secrets["gcp_service_account"]), f)
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
+            else:
+                os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", str(BASE_DIR / "config" / "google_credentials.json"))
+        except Exception:
+            # If writing secrets fails, fall back to existing file path
+            os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", str(BASE_DIR / "config" / "google_credentials.json"))
+
         return bigquery.Client()
     except Exception:
         return None
