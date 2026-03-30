@@ -7,6 +7,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     AIRFLOW__CORE__LOGGING_LEVEL: INFO
+    AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
   volumes:
     - ./dags:/opt/airflow/dags
     - ./data:/opt/airflow/data

@@ -6,7 +6,7 @@ PhilsPulse: National Economic Ingestion and Analytics Pipeline
 
 ## Problem Statement
 
-Philippine market volatility often lacks transparent, localized data correlation. PhilsPulse builds a production-grade data platform to ingest, warehouse, and visualize long-horizon commodity price trends by bridging global food benchmarks with local real-time market indicators and poverty context.
+Philippine market volatility often lacks transparent, localized data correlation. PhilsPulse builds a production-grade data platform to ingest, warehouse, and visualize long-horizon commodity price trends by bridging food price, macroeconomic growth, and poverty indicators.
 
 ## Primary Objective
 
@@ -20,23 +20,26 @@ Deliver a full-score capstone project by demonstrating end-to-end capability in 
 
 ## In-Scope Data Sources
 
-### 1) WFP Global Food Prices Database
+### 1) WFP Food Prices for Philippines (HDX)
 
-- Role in project: Global benchmark for commodity pricing
-- Coverage notes: Historical depth beginning as early as 1992 for some countries, broader coverage from later years
-- Project use: Benchmark comparison against local market behavior
+- Source page: https://data.humdata.org/dataset/wfp-food-prices-for-philippines
+- Role in project: Food price movement signal for market-level trend analysis
+- Coverage notes: Historical market observations by commodity and location
+- Project use: Price trend analysis and downstream regional/categorical dashboard tiles
 
-### 2) Philippines Real Time Prices (World Bank RTP)
+### 2) World Bank Economy and Growth Indicators for Philippines (HDX)
 
-- Role in project: Weekly local market signal for food, energy, and exchange dynamics
-- Coverage notes: Weekly updates with model-based gap filling
-- Project use: Local trend layer for near-current movement
+- Source page: https://data.humdata.org/dataset/world-bank-economy-and-growth-indicators-for-philippines
+- Role in project: Macroeconomic context for growth and economic performance
+- Coverage notes: Country-level indicator series across years
+- Project use: Economic context layer for interpreting food price and poverty shifts
 
-### 3) Philippines Poverty Statistics (PSA-derived with PSGC)
+### 3) World Bank Poverty Indicators for Philippines (HDX)
 
-- Role in project: Socioeconomic context by geography
-- Coverage notes: Official poverty incidence and magnitude metrics with geographic keys
-- Project use: Vulnerability lens for regional interpretation
+- Source page: https://data.humdata.org/dataset/world-bank-poverty-indicators-for-philippines
+- Role in project: Socioeconomic vulnerability context
+- Coverage notes: Poverty-related indicator series by year
+- Project use: Vulnerability lens for regional and temporal interpretation
 
 ## Analytical Scope for MVP
 
@@ -85,3 +88,11 @@ Deliver a full-score capstone project by demonstrating end-to-end capability in 
 - Warehouse optimization: BigQuery partition and cluster metadata
 - Dashboard: Screenshots of required tiles
 - Reproducibility: Setup guide validated by peer-style run-through
+
+## Submission Placeholders
+
+- PLACEHOLDER: Reviewer name and date of peer run-through
+- PLACEHOLDER: Screenshot path for DAG graph
+- PLACEHOLDER: Screenshot path for successful DAG run logs
+- PLACEHOLDER: Screenshot path for BigQuery metadata proof
+- PLACEHOLDER: Screenshot path for Streamlit required tiles

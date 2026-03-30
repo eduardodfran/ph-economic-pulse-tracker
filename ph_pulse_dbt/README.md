@@ -1,19 +1,12 @@
-Welcome to your new dbt project!
+# ph_pulse_dbt
 
-### Using the starter project
+This folder contains dbt models for transforming raw/staging tables into analytics-ready marts for the PhilsPulse dashboard.
 
-Try running the following commands:
+## Official Dataset Sources (HDX)
 
-- dbt run
-- dbt test
-
-### Resources:
-
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [chat](https://community.getdbt.com/) on Slack for live discussions and support
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+1. [WFP Food Prices for Philippines](https://data.humdata.org/dataset/wfp-food-prices-for-philippines)
+2. [World Bank Economy and Growth Indicators for Philippines](https://data.humdata.org/dataset/world-bank-economy-and-growth-indicators-for-philippines)
+3. [World Bank Poverty Indicators for Philippines](https://data.humdata.org/dataset/world-bank-poverty-indicators-for-philippines)
 
 ## Partitioning and Performance
 
@@ -23,7 +16,9 @@ I implemented partitioning by year on the `fct_food_prices` table (partitioned b
 
 ```mermaid
 flowchart LR
-    WFP[WFP CSVs] --> Airflow[Airflow DAG]
+    WFP[WFP Food Prices (PH)] --> Airflow[Airflow DAG]
+    ECON[WB Economy and Growth (PH)] --> Airflow
+    POV[WB Poverty Indicators (PH)] --> Airflow
     Airflow --> GCS[Google Cloud Storage]
     GCS --> BQ[BigQuery]
     BQ --> dbt[dbt]
@@ -32,7 +27,7 @@ flowchart LR
 
 ## Batch Ingestion Logic
 
-Although the data is historical, the pipeline is designed as a Batch Ingestion system. Airflow orchestrates monthly batch loads from WFP CSVs to Google Cloud Storage, then into BigQuery. dbt transforms the data for analytics, and Streamlit provides the dashboard. This design supports scalable, repeatable monthly updates as new data arrives.
+Although the data is historical, the pipeline is designed as a batch ingestion system. Airflow orchestrates daily runs that load CSV snapshots into BigQuery staging tables. dbt transforms and documents those tables into analytics-ready models for dashboard use.
 
 ## How to Run (Reproducibility)
 
@@ -67,6 +62,8 @@ dbt seed --profiles-dir $(DBT_PROFILES_DIR)
 dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
 ```
 
+![PLACEHOLDER - dbt seed/build output screenshot goes here](../docs/screenshots/dbt-seed-build-output.png)
+
 4. Production run (against your live BigQuery dataset)
 
 ```bash
@@ -74,6 +71,16 @@ cd ph_pulse_dbt
 dbt build --profiles-dir $(DBT_PROFILES_DIR)
 ```
 
+![PLACEHOLDER - production dbt build output screenshot goes here](../docs/screenshots/dbt-production-build-output.png)
+
 If you prefer not to copy `profiles.yml` to `~/.dbt`, set the `DBT_PROFILES_DIR` environment variable to point to this folder and dbt will use that profiles file.
 
-If you need help creating a service account for dbt with the minimum BigQuery permissions, I can add example IAM roles and a short walkthrough.
+## Evidence Placeholders
+
+- PLACEHOLDER: Add screenshot path for `dbt run` success output.
+- PLACEHOLDER: Add screenshot path for `dbt test` success output.
+- PLACEHOLDER: Add screenshot path for dbt lineage/docs page (if generated).
+
+Insert dbt docs lineage screenshot here (if you run `dbt docs generate` and `dbt docs serve`):
+
+![PLACEHOLDER - dbt docs lineage screenshot goes here](../docs/screenshots/dbt-docs-lineage.png)

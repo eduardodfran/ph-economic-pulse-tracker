@@ -4,22 +4,15 @@ This repository tracks delivery of the PhilsPulse capstone project.
 
 Project framing and dataset scope are documented in [docs/project-charter.md](docs/project-charter.md).
 
-Welcome to your new dbt project!
+## Official Dataset Sources (HDX)
 
-### Using the starter project
+The project uses these three datasets as the official source pages:
 
-Try running the following commands:
+1. [WFP Food Prices for Philippines](https://data.humdata.org/dataset/wfp-food-prices-for-philippines)
+2. [World Bank Economy and Growth Indicators for Philippines](https://data.humdata.org/dataset/world-bank-economy-and-growth-indicators-for-philippines)
+3. [World Bank Poverty Indicators for Philippines](https://data.humdata.org/dataset/world-bank-poverty-indicators-for-philippines)
 
-- dbt run
-- dbt test
-
-### Resources:
-
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [chat](https://community.getdbt.com/) on Slack for live discussions and support
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+Note: the Airflow DAG uses direct CSV resource links by default. You can override those links using Airflow Variables if needed.
 
 ## Partitioning and Performance
 
@@ -29,7 +22,9 @@ I implemented partitioning by year on the `fct_food_prices` table (partitioned b
 
 ```mermaid
 flowchart LR
-    Datasets --> Airflow[Airflow DAG]
+   WFP[WFP Food Prices (PH)] --> Airflow[Airflow DAG]
+   ECON[WB Economy and Growth (PH)] --> Airflow
+   POV[WB Poverty Indicators (PH)] --> Airflow
     Airflow --> GCS[Google Cloud Storage]
     GCS --> BQ[BigQuery]
     BQ --> dbt[dbt]
@@ -38,7 +33,7 @@ flowchart LR
 
 ## Batch Ingestion Logic
 
-Although the data is historical, the pipeline is designed as a Batch Ingestion system. Airflow orchestrates monthly batch loads from WFP CSVs to Google Cloud Storage, then into BigQuery. dbt transforms the data for analytics, and Streamlit provides the dashboard. This design supports scalable, repeatable monthly updates as new data arrives.
+Although the data is historical, the pipeline is designed as a batch ingestion system. Airflow orchestrates daily runs that fetch CSV snapshots from the three HDX sources, writes raw files to Google Cloud Storage, and loads staging tables in BigQuery. dbt then transforms the data for analytics, and Streamlit provides the dashboard.
 
 ## How to Run (Reproducibility)
 
@@ -69,18 +64,26 @@ To run the Airflow DAGs in this project, reviewers must complete the following s
 
 ### 2. Airflow Variables
 
-![alt text](image-3.png)
+![alt text](image.png)
+
+PLACEHOLDER NOTE: Replace the placeholder path above with your actual Airflow Variables screenshot path.
 
 Set the following Airflow Variables (Admin → Variables or via CLI):
 
-| Variable Name   | Example Value                  | Description              |
-| --------------- | ------------------------------ | ------------------------ |
-| ph_bq_project   | your-gcp-project-id            | GCP project for BigQuery |
-| ph_bq_dataset   | ph_economy_staging             | BigQuery dataset         |
-| ph_bucket_name  | ph-economic-pulse-lake-eduardo | GCS bucket for raw data  |
-| ph_wfp_url      | (default provided, optional)   | WFP CSV URL              |
-| ph_poverty_url  | (default provided, optional)   | Poverty CSV URL          |
-| ph_economic_url | (default provided, optional)   | Economic growth CSV URL  |
+| Variable Name   | Example Value                  | Description                         |
+| --------------- | ------------------------------ | ----------------------------------- |
+| ph_bq_project   | your-gcp-project-id            | GCP project for BigQuery            |
+| ph_bq_dataset   | ph_economy_staging             | BigQuery dataset                    |
+| ph_bucket_name  | ph-economic-pulse-lake-eduardo | GCS bucket for raw data             |
+| ph_wfp_url      | (optional override)            | WFP Food Prices CSV resource URL    |
+| ph_poverty_url  | (optional override)            | Poverty Indicators CSV resource URL |
+| ph_economic_url | (optional override)            | Economy/Growth CSV resource URL     |
+
+Default source pages for reference:
+
+- WFP: https://data.humdata.org/dataset/wfp-food-prices-for-philippines
+- Economy/Growth: https://data.humdata.org/dataset/world-bank-economy-and-growth-indicators-for-philippines
+- Poverty: https://data.humdata.org/dataset/world-bank-poverty-indicators-for-philippines
 
 **Note:**  
 Even though defaults exist in the code, you must set these variables in Airflow for the DAGs to work reliably.
@@ -151,12 +154,16 @@ terraform plan
 terraform apply -auto-approve
 ```
 
+![PLACEHOLDER - Terraform apply proof screenshot goes here](docs/screenshots/terraform-apply-proof.png)
+
 5. Start services (Airflow):
 
 ```bash
 docker compose up -d
 # visit http://localhost:8080 to view Airflow and trigger DAGs
 ```
+
+![PLACEHOLDER - Airflow DAG graph screenshot goes here](docs/screenshots/airflow-dag-graph.png)
 
 6. Configure Airflow variables
 
@@ -171,9 +178,9 @@ docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-ec
 
 Use the same project/dataset names you provisioned with Terraform (or update the Terraform variables and re-run `terraform apply`).
 
-7. Run dbt (local development using seeds):
+![PLACEHOLDER - Airflow successful DAG run logs screenshot goes here](docs/screenshots/airflow-successful-run-logs.png)
 
-8. Run dbt (local development using seeds):
+7. Run dbt (local development using seeds):
 
 ```bash
 cd ph_pulse_dbt
@@ -182,11 +189,16 @@ dbt seed --profiles-dir $(DBT_PROFILES_DIR)
 dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
 ```
 
-7. Launch the Streamlit dashboard:
+![PLACEHOLDER - dbt build output screenshot goes here](docs/screenshots/dbt-build-output.png)
+
+8. Launch the Streamlit dashboard:
 
 ```bash
 streamlit run app.py
 ```
+
+![PLACEHOLDER - Dashboard tile 1 (temporal) screenshot goes here](docs/screenshots/dashboard-tile-temporal.png)
+![PLACEHOLDER - Dashboard tile 2 (categorical-regional) screenshot goes here](docs/screenshots/dashboard-tile-categorical.png)
 
 Make shortcuts
 
@@ -215,10 +227,25 @@ If you want packages installed into the Airflow container, you can mount or copy
 
 If you want me to automatically add a simple Dockerfile or update `docker-compose.yaml` to install `airflow-requirements.txt` inside the Airflow service, tell me and I'll add that change.
 
+## Submission Placeholders (Fill These Before Final Submission)
+
+Screenshot filename guide: see `docs/screenshots/README.md`.
+
+- PLACEHOLDER: `<your-gcp-project-id>`
+- PLACEHOLDER: `<your-bigquery-dataset-id>`
+- PLACEHOLDER: `<your-gcs-bucket-name>`
+- PLACEHOLDER: Add screenshot path for Airflow DAG graph view.
+- PLACEHOLDER: Add screenshot path for successful Airflow task logs.
+- PLACEHOLDER: Add screenshot path for BigQuery table partitioning and clustering metadata.
+- PLACEHOLDER: Add screenshot path for Streamlit dashboard tile 1 (temporal trend).
+- PLACEHOLDER: Add screenshot path for Streamlit dashboard tile 2 (categorical/regional).
+
+## BigQuery Optimization Evidence Placement
+
+Insert your BigQuery partition/clustering proof screenshot here:
+
+![PLACEHOLDER - BigQuery partition and clustering metadata screenshot goes here](docs/screenshots/bigquery-partition-cluster-metadata.png)
+
 ## Results
 
-![alt text](image-2.png)
-![alt text](image-4.png)
-![alt text](image-3.png)
-
-
+PLACEHOLDER NOTE: This section can keep final polished screenshots after you replace the placeholders above.
