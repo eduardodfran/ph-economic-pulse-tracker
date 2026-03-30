@@ -53,7 +53,7 @@ Prerequisites
 
 ## Airflow Setup Instructions
 
-To run the Airflow DAGs in this project, reviewers must complete the following setup steps:
+To run the Airflow DAGs in this project, you must complete the following setup steps:
 
 ### 1. Airflow Connections
 
@@ -65,8 +65,6 @@ To run the Airflow DAGs in this project, reviewers must complete the following s
 ### 2. Airflow Variables
 
 ![alt text](images/airflow-variables.png)
-
-PLACEHOLDER NOTE: Replace the placeholder path above with your actual Airflow Variables screenshot path.
 
 Set the following Airflow Variables (Admin → Variables or via CLI):
 
@@ -88,17 +86,10 @@ Default source pages for reference:
 **Note:**  
 Even though defaults exist in the code, you must set these variables in Airflow for the DAGs to work reliably.
 
-Example CLI commands (run inside the Airflow container):
-
-```bash
-docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
-docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
-docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-economic-pulse-lake-eduardo
-```
 
 ### 3. Google Cloud Credentials
 
-- Copy your service account key to `config/google_credentials.json` (do not commit this file).
+- Copy your service account key to `config/google_credentials.json`.
 - Set the environment variable:
   - On Linux/macOS:  
      `export GOOGLE_APPLICATION_CREDENTIALS=config/google_credentials.json`
@@ -154,7 +145,6 @@ terraform plan
 terraform apply -auto-approve
 ```
 
-
 5. Start services (Airflow):
 
 ```bash
@@ -176,7 +166,6 @@ docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-ec
 ```
 
 Use the same project/dataset names you provisioned with Terraform (or update the Terraform variables and re-run `terraform apply`).
-
 
 7. Run dbt (local development using seeds):
 
@@ -228,23 +217,4 @@ Airflow container
 If you want packages installed into the Airflow container, you can mount or copy `airflow-requirements.txt` into the image build process or pass it to the official Airflow image during initialization. See the Airflow image docs for details.
 
 If you want me to automatically add a simple Dockerfile or update `docker-compose.yaml` to install `airflow-requirements.txt` inside the Airflow service, tell me and I'll add that change.
-
-## Submission Placeholders (Fill These Before Final Submission)
-
-Screenshot filename guide: see `docs/screenshots/README.md`.
-
-- PLACEHOLDER: `<your-gcp-project-id>`
-- PLACEHOLDER: `<your-bigquery-dataset-id>`
-- PLACEHOLDER: `<your-gcs-bucket-name>`
-- PLACEHOLDER: Add screenshot path for Airflow DAG graph view.
-- PLACEHOLDER: Add screenshot path for successful Airflow task logs.
-- PLACEHOLDER: Add screenshot path for BigQuery table partitioning and clustering metadata.
-- PLACEHOLDER: Add screenshot path for Streamlit dashboard tile 1 (temporal trend).
-- PLACEHOLDER: Add screenshot path for Streamlit dashboard tile 2 (categorical/regional).
-
-## BigQuery Optimization Evidence Placement
-
-Insert your BigQuery partition/clustering proof screenshot here:
-
-![PLACEHOLDER - BigQuery partition and clustering metadata screenshot goes here](docs/screenshots/bigquery-partition-cluster-metadata.png)
 
