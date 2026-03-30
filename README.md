@@ -37,8 +37,6 @@ Although the data is historical, the pipeline is designed as a batch ingestion s
 
 ## Detailed Setup and Runbook (Clone -> Terraform -> Docker -> DAG)
 
-Use this sequence for a clean, reviewer-style run from scratch.
-
 ### 0. Clone the repository
 
 ```bash
@@ -181,14 +179,37 @@ The DAG expects:
 - Connection: `google_cloud_default`
 - Variables: `ph_bq_project`, `ph_bq_dataset`, `ph_bucket_name`
 
-You can configure in UI (`Admin -> Connections`, `Admin -> Variables`) or by CLI:
+You can configure these using either the Airflow web UI (recommended for most users) or the CLI.
+
+#### Using the Airflow Web UI (Recommended)
+
+1. Open Airflow at [http://localhost:8080](http://localhost:8080) (default: username `airflow`, password `airflow`).
+2. Go to **Admin → Connections**.
+
+- Click **+ (Add a new record)**.
+- Set **Conn Id** to `google_cloud_default`.
+- Set **Conn Type** to `Google Cloud`.
+- In **Extra**, paste:
+  ```
+  {"key_path":"/config/google_credentials.json","project":"your-gcp-project-id"}
+  ```
+  (Adjust the `key_path` if your Docker mount is different. By default, `config` is mounted to `/config`.)
+
+3. Go to **Admin → Variables**.
+
+- Add the following variables:
+  - `ph_bq_project`: your GCP project ID
+  - `ph_bq_dataset`: your BigQuery dataset (e.g., `ph_economy_staging`)
+  - `ph_bucket_name`: your unique GCS bucket name
+
+#### Using the CLI (Alternative)
 
 ```bash
 # Ignore "Connection not found" error if this is your first setup.
 docker compose exec airflow-webserver airflow connections delete google_cloud_default
 docker compose exec airflow-webserver airflow connections add google_cloud_default \
-   --conn-type google_cloud_platform \
-   --conn-extra '{"key_path":"/opt/airflow/config/google_credentials.json","project":"your-gcp-project-id"}'
+  --conn-type google_cloud_platform \
+  --conn-extra '{"key_path":"/config/google_credentials.json","project":"your-gcp-project-id"}'
 
 docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
 docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
@@ -204,6 +225,11 @@ docker compose exec airflow-webserver airflow variables set ph_economic_url "<di
 ```
 
 ![Airflow Variables](images/airflow-variables.png)
+
+#### GCP Credentials
+
+- Make sure your `google_credentials.json` is in the `config` folder and is mounted to `/config` in your Docker container (see `docker-compose.yaml`).
+- The `key_path` in the connection must match the path inside the container.
 
 ### 7. Verify DAG is loaded
 

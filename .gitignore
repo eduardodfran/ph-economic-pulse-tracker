@@ -42,3 +42,5 @@ data/*
 ph_pulse_dbt/target/
 ph_pulse_dbt/dbt_packages/
 ph_pulse_dbt/logs/
+
+*.tfstate
