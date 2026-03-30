@@ -35,77 +35,40 @@ flowchart LR
 
 Although the data is historical, the pipeline is designed as a batch ingestion system. Airflow orchestrates daily runs that fetch CSV snapshots from the three HDX sources, writes raw files to Google Cloud Storage, and loads staging tables in BigQuery. dbt then transforms the data for analytics, and Streamlit provides the dashboard.
 
-## How to Run (Reproducibility)
+## Detailed Setup and Runbook (Clone -> Terraform -> Docker -> DAG)
 
-To make reproduction turnkey the repository includes a small set of helper files:
+Use this sequence for a clean, reviewer-style run from scratch.
 
-- `requirements.txt` — Python packages for local development (dashboard + ingestion scripts)
-- `airflow-requirements.txt` — optional packages intended for the Airflow container
-- `ph_pulse_dbt/profiles.yml.template` — a dbt BigQuery profile template (copy to `~/.dbt/profiles.yml`)
-- `.env.example` — example environment variables to copy into `.env` or export in your shell
-- `Makefile` — convenience targets: `make infra`, `make up`, `make dbt-run`, `make dashboard`
+### 0. Clone the repository
 
-Prerequisites
+```bash
+git clone https://github.com/eduardodfran/ph-economic-pulse-tracker.git
+cd ph-economic-pulse-tracker
+```
 
-- Python 3.10+ and a virtualenv (optional but recommended)
-- `gcloud` CLI authenticated to a service account with BigQuery & Storage roles (or use a service account JSON)
-- Docker & Docker Compose (for Airflow)
+### 1. Prerequisites
 
-## Airflow Setup Instructions
+Install and verify:
 
-To run the Airflow DAGs in this project, you must complete the following setup steps:
+- Python 3.10+
+- Docker Desktop (with Docker Compose)
+- Terraform 1.5+
+- Google Cloud SDK (`gcloud`) and BigQuery CLI (`bq`)
 
-### 1. Airflow Connections
+Quick checks:
 
-- **google_cloud_default**:  
-   Create a connection in Airflow (Admin → Connections) named `google_cloud_default` of type "Google Cloud".
-  - Use a service account key with access to BigQuery and GCS.
-  - You can upload the JSON key file directly in the connection or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+```bash
+python --version
+docker --version
+docker compose version
+terraform --version
+gcloud --version
+bq version
+```
 
-### 2. Airflow Variables
+### 2. Create local Python environment
 
-![alt text](images/airflow-variables.png)
-
-Set the following Airflow Variables (Admin → Variables or via CLI):
-
-| Variable Name   | Example Value                  | Description                         |
-| --------------- | ------------------------------ | ----------------------------------- |
-| ph_bq_project   | your-gcp-project-id            | GCP project for BigQuery            |
-| ph_bq_dataset   | ph_economy_staging             | BigQuery dataset                    |
-| ph_bucket_name  | ph-economic-pulse-lake-eduardo | GCS bucket for raw data             |
-| ph_wfp_url      | (optional override)            | WFP Food Prices CSV resource URL    |
-| ph_poverty_url  | (optional override)            | Poverty Indicators CSV resource URL |
-| ph_economic_url | (optional override)            | Economy/Growth CSV resource URL     |
-
-Default source pages for reference:
-
-- WFP: https://data.humdata.org/dataset/wfp-food-prices-for-philippines
-- Economy/Growth: https://data.humdata.org/dataset/world-bank-economy-and-growth-indicators-for-philippines
-- Poverty: https://data.humdata.org/dataset/world-bank-poverty-indicators-for-philippines
-
-**Note:**  
-Even though defaults exist in the code, you must set these variables in Airflow for the DAGs to work reliably.
-
-
-### 3. Google Cloud Credentials
-
-- Copy your service account key to `config/google_credentials.json`.
-- Set the environment variable:
-  - On Linux/macOS:  
-     `export GOOGLE_APPLICATION_CREDENTIALS=config/google_credentials.json`
-  - On Windows PowerShell:  
-     `$env:GOOGLE_APPLICATION_CREDENTIALS = "config/google_credentials.json"`
-
-- The service account must have permissions for BigQuery and GCS.
-
-### 4. Documentation
-
-- All required variables and connection names are listed above.
-- See `config/google_credentials.json.example` for the expected credential file format.
-
-Quickstart (Linux/macOS)
-
-1. Create a Python virtual environment and install dependencies:
+Linux/macOS:
 
 ```bash
 python -m venv .venv
@@ -113,108 +76,254 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Provide credentials and environment variables (copy the example):
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 3. Configure GCP authentication and local env vars
+
+1. Create a service account with BigQuery + GCS permissions (minimum: BigQuery Data Editor, BigQuery Job User, Storage Admin).
+2. Download the service account key JSON.
+3. Save it locally as `config/google_credentials.json` (do not commit this file).
+4. Copy env template and set values.
+
+Linux/macOS:
 
 ```bash
 cp .env.example .env
-# edit .env and set GOOGLE_APPLICATION_CREDENTIALS and GCP_PROJECT
-export GOOGLE_APPLICATION_CREDENTIALS=/full/path/to/service-account.json
-export GCP_PROJECT=your-gcp-project-id
-export TF_VAR_project=$GCP_PROJECT
-export TF_VAR_region=asia-southeast1
+export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/config/google_credentials.json"
+export GCP_PROJECT="your-gcp-project-id"
+export TF_VAR_project="$GCP_PROJECT"
+export TF_VAR_region="asia-southeast1"
 ```
 
-3. Set up dbt profiles
+Windows PowerShell:
 
-Copy the template to your dbt profiles location (default `~/.dbt`):
+```powershell
+Copy-Item .env.example .env
+$env:GOOGLE_APPLICATION_CREDENTIALS = "$PWD\config\google_credentials.json"
+$env:GCP_PROJECT = "your-gcp-project-id"
+$env:TF_VAR_project = $env:GCP_PROJECT
+$env:TF_VAR_region = "asia-southeast1"
+```
+
+Optional: validate auth before provisioning:
+
+```bash
+gcloud auth activate-service-account --key-file config/google_credentials.json
+gcloud config set project your-gcp-project-id
+gcloud auth list
+```
+
+### 4. Provision infrastructure with Terraform
+
+1. Create Terraform variable file.
+2. Plan and apply.
+3. Capture outputs for Airflow variables.
+
+Linux/macOS:
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars and set project and unique bucket_name
+terraform init
+terraform validate
+terraform plan -out tfplan
+terraform apply tfplan
+terraform output
+cd ..
+```
+
+Windows PowerShell:
+
+```powershell
+Set-Location terraform
+Copy-Item terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars and set project and unique bucket_name
+terraform init
+terraform validate
+terraform plan -out tfplan
+terraform apply tfplan
+terraform output
+Set-Location ..
+```
+
+Expected resources:
+
+- 1 GCS bucket (data lake)
+- 1 BigQuery dataset (staging)
+
+### 5. Start Airflow in Docker
+
+Initialize Airflow metadata DB and admin user, then start services:
+
+```bash
+docker compose up airflow-init
+docker compose up -d
+docker compose ps
+```
+
+Airflow UI:
+
+- URL: http://localhost:8080
+- Username: `airflow`
+- Password: `airflow`
+
+### 6. Configure Airflow connection and variables
+
+The DAG expects:
+
+- Connection: `google_cloud_default`
+- Variables: `ph_bq_project`, `ph_bq_dataset`, `ph_bucket_name`
+
+You can configure in UI (`Admin -> Connections`, `Admin -> Variables`) or by CLI:
+
+```bash
+# Ignore "Connection not found" error if this is your first setup.
+docker compose exec airflow-webserver airflow connections delete google_cloud_default
+docker compose exec airflow-webserver airflow connections add google_cloud_default \
+   --conn-type google_cloud_platform \
+   --conn-extra '{"key_path":"/opt/airflow/config/google_credentials.json","project":"your-gcp-project-id"}'
+
+docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
+docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
+docker compose exec airflow-webserver airflow variables set ph_bucket_name your-unique-gcs-bucket-name
+```
+
+Optional source URL overrides:
+
+```bash
+docker compose exec airflow-webserver airflow variables set ph_wfp_url "<direct-csv-url>"
+docker compose exec airflow-webserver airflow variables set ph_poverty_url "<direct-csv-url>"
+docker compose exec airflow-webserver airflow variables set ph_economic_url "<direct-csv-url>"
+```
+
+![Airflow Variables](images/airflow-variables.png)
+
+### 7. Verify DAG is loaded
+
+```bash
+docker compose exec airflow-webserver airflow dags list | grep ph_economic_pulse_data_ingestion
+docker compose exec airflow-webserver airflow tasks list ph_economic_pulse_data_ingestion
+```
+
+If `grep` is not available on your shell, run `airflow dags list` and check manually.
+
+### 8. Trigger and monitor the DAG run
+
+Trigger:
+
+```bash
+docker compose exec airflow-webserver airflow dags trigger ph_economic_pulse_data_ingestion
+```
+
+Monitor status:
+
+```bash
+docker compose exec airflow-webserver airflow dags list-runs -d ph_economic_pulse_data_ingestion
+docker compose logs -f airflow-scheduler
+```
+
+You can also open Graph/Grid view in Airflow UI to inspect each task state.
+
+![Airflow DAG graph](images/airflow-diagram.png)
+
+### 9. Validate outputs after a successful run
+
+Check GCS objects:
+
+```bash
+gsutil ls gs://your-unique-gcs-bucket-name/raw/
+```
+
+Check BigQuery tables:
+
+```bash
+bq ls your-gcp-project-id:ph_economy_staging
+```
+
+Spot-check row counts:
+
+```bash
+bq query --use_legacy_sql=false 'SELECT COUNT(*) AS rows FROM `your-gcp-project-id.ph_economy_staging.stg_food_prices_raw`'
+```
+
+### 10. Optional: run dbt transformations locally
+
+Set up profile:
 
 ```bash
 mkdir -p ~/.dbt
 cp ph_pulse_dbt/profiles.yml.template ~/.dbt/profiles.yml
-# Edit ~/.dbt/profiles.yml and confirm the values or rely on the env vars above
 ```
 
-Alternatively, set `DBT_PROFILES_DIR` to point at `ph_pulse_dbt` and keep the template there.
-
-4. Provision infrastructure (optional):
-
-```bash
-cd terraform
-terraform init
-terraform plan
-terraform apply -auto-approve
-```
-
-5. Start services (Airflow):
-
-```bash
-docker compose up -d
-# visit http://localhost:8080 to view Airflow and trigger DAGs
-```
-
-![Airflow DAG graph](images/airflow-diagram.png)
-
-6. Configure Airflow variables
-
-The DAGs read a few configuration values from Airflow Variables so you can run the pipeline without editing code. Set these in the Airflow UI (`Admin -> Variables`) or via the CLI inside the Airflow webserver container:
-
-```bash
-# inside the workspace
-docker compose exec airflow-webserver airflow variables set ph_bq_project your-gcp-project-id
-docker compose exec airflow-webserver airflow variables set ph_bq_dataset ph_economy_staging
-docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-economic-pulse-lake-eduardo
-```
-
-Use the same project/dataset names you provisioned with Terraform (or update the Terraform variables and re-run `terraform apply`).
-
-7. Run dbt (local development using seeds):
+Run dbt:
 
 ```bash
 cd ph_pulse_dbt
-# seed sample data for local runs and then build
-dbt seed --profiles-dir $(DBT_PROFILES_DIR)
-dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
+dbt seed --profiles-dir ~/.dbt
+dbt build --profiles-dir ~/.dbt --vars "use_seed: true"
+cd ..
 ```
 
 ![dbt build output](images/dbt-run.png)
 
-8. Launch the Streamlit dashboard:
+### 11. Optional: run dashboard
 
 ```bash
 streamlit run app.py
 ```
 
-![alt text](images/db-overview.png)
-![alt text](images/db-food-prices.png)
-![alt text](images/db-food-prices-2.png)
-![alt text](images/db-poverty.png)
-![alt text](images/db-economic.png)
-![alt text](images/db-cross.png)
+Dashboard screenshots:
 
-Make shortcuts
+![Overview](images/db-overview.png)
+![Food Prices](images/db-food-prices.png)
+![Food Prices 2](images/db-food-prices-2.png)
+![Poverty](images/db-poverty.png)
+![Economic](images/db-economic.png)
+![Cross View](images/db-cross.png)
 
-You can use the included Makefile (if `make` is available on your system):
+### 12. Makefile shortcuts
+
+If `make` is available:
 
 ```bash
-make infra           # terraform init/plan/apply
-make up              # docker compose up -d
-make dbt-run         # dbt build (uses DBT_PROFILES_DIR if set)
-make dashboard       # run streamlit
+make infra      # terraform init/plan/apply
+make up         # docker compose up -d
+make dbt-run    # dbt build
+make dashboard  # streamlit run app.py
 ```
 
-Notes for Windows / PowerShell
+### 13. Troubleshooting
 
-- Activate the venv with:
+- DAG cannot access BigQuery/GCS:
+  - Recheck `google_cloud_default` connection.
+  - Confirm service account roles and `project` value.
+- Airflow webserver keeps restarting:
+  - Run `docker compose logs airflow-webserver`.
+  - Re-run `docker compose up airflow-init`.
+- Terraform apply fails with bucket-name conflict:
+  - Change `bucket_name` in `terraform/terraform.tfvars` to a globally unique name.
+- DAG appears but tasks fail on missing variables:
+  - Re-set `ph_bq_project`, `ph_bq_dataset`, `ph_bucket_name`.
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-# set environment variables using $env:NAME = 'value' or use a .env file loader
+### 14. Teardown / cleanup
+
+Stop Airflow:
+
+```bash
+docker compose down
 ```
 
-Airflow container
+Destroy cloud resources when done:
 
-If you want packages installed into the Airflow container, you can mount or copy `airflow-requirements.txt` into the image build process or pass it to the official Airflow image during initialization. See the Airflow image docs for details.
-
-If you want me to automatically add a simple Dockerfile or update `docker-compose.yaml` to install `airflow-requirements.txt` inside the Airflow service, tell me and I'll add that change.
-
+```bash
+cd terraform
+terraform destroy
+cd ..
+```
