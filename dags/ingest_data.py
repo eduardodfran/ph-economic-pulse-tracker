@@ -24,7 +24,7 @@ import io
 BUCKET_NAME = Variable.get("ph_bucket_name", default_var="ph-economic-pulse-lake-eduardo")
 WFP_URL = Variable.get("ph_wfp_url", default_var="https://data.humdata.org/dataset/ea251823-8694-47b4-82d0-7d27f00e8aba/resource/9a842d72-0d7d-4922-ad0e-eb8106c1ab0e/download/wfp_food_prices_phl.csv")
 POVERTY_URL = Variable.get("ph_poverty_url", default_var="https://data.humdata.org/dataset/c2840912-2adb-494b-8dc7-983166802b98/resource/10c50bf6-8310-47f3-bcdd-e33cc6bc7791/download/poverty_phl.csv")
-ECONOMIC_GROWTH_URL = Variable.get("ph_economic_url", default_var="https://data.humdata.org/dataset/ea251823-8694-47b4-82d0-7d27f00e8aba/resource/9a842d72-0d7d-4922-ad0e-eb8106c1ab0e/download/economy_growth_phl.csv")
+ECONOMIC_GROWTH_URL = Variable.get("ph_economic_url", default_var="https://data.humdata.org/dataset/7489e5f7-592a-427f-adbe-885da3973489/resource/deb43594-f4df-4576-9209-6ae4734b20ed/download/economy-and-growth_phl.csv")
 
 # BigQuery destination configuration (project and dataset can be set in Airflow)
 BQ_PROJECT = Variable.get("ph_bq_project", default_var="your-gcp-project-id")

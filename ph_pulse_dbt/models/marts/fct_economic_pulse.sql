@@ -54,7 +54,6 @@ select
     p.poverty_rate_pct,
     p.gini_index,
 
-    -- The "Kamote Ratio": how many pesos of annual income buy one peso of kamote
     safe_divide(e.net_income_per_capita, f.avg_price_php) as affordability_index
 
 from food_prices f

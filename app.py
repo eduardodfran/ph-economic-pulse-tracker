@@ -1,395 +1,684 @@
 import os
 from pathlib import Path
+from typing import List, Optional
 
-import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
-from google.cloud import bigquery
-from plotly.subplots import make_subplots
 
 
 BASE_DIR = Path(__file__).resolve().parent
-os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", str(BASE_DIR / "config" / "google_credentials.json"))
+BQ_PROJECT = "zoomcamp-data-engineer-484608"
+BQ_DATASET = "ph_economy_staging"
 
-client = bigquery.Client()
-
-
-st.set_page_config(
-    page_title="PhilsPulse: The Kamote Paradox Solved",
-    page_icon="🇵🇭",
-    layout="wide",
-)
+st.set_page_config(page_title="PhilsPulse Dashboard", page_icon="PH", layout="wide")
 
 
-st.markdown(
-    """
-    <style>
-    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
-    .hero {
-        padding: 1.5rem 1.75rem;
-        border-radius: 24px;
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 47, 73, 0.96));
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        box-shadow: 0 20px 60px rgba(2, 6, 23, 0.35);
-        margin-bottom: 1rem;
-    }
-    .hero h1 { color: #f8fafc; font-size: 2.2rem; margin-bottom: 0.25rem; }
-    .hero p { color: #cbd5e1; margin: 0; font-size: 1rem; }
-    .section-label { color: #94a3b8; font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 0.25rem; }
-    .footer {
-        margin-top: 1.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid rgba(148, 163, 184, 0.2);
-        color: #94a3b8;
-        font-size: 0.95rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+def _pick_column(df: pd.DataFrame, candidates: List[str], fallback_index: int = 0) -> Optional[str]:
+    for name in candidates:
+        if name in df.columns:
+            return name
+    if len(df.columns) == 0:
+        return None
+    return df.columns[min(fallback_index, len(df.columns) - 1)]
 
 
-@st.cache_data(show_spinner=False)
-def get_master_data() -> pd.DataFrame:
-    query = """
-        SELECT *
-        FROM `zoomcamp-data-engineer-484608.ph_economy_staging.fct_economic_pulse`
-        ORDER BY report_month ASC
-    """
-    frame = client.query(query).to_dataframe()
-    frame["report_month"] = pd.to_datetime(frame["report_month"])
-    return frame
-
-
-@st.cache_data(show_spinner=False)
-def get_correlation_data() -> pd.DataFrame:
-    query = """
-        SELECT *
-        FROM `zoomcamp-data-engineer-484608.ph_economy_staging.fct_economic_correlation`
-        ORDER BY report_year ASC
-    """
-    frame = client.query(query).to_dataframe()
-    return frame
-
-
-def format_money(value: float) -> str:
-    return f"₱{value:,.2f}"
-
-
-def safe_percent_change(first_value: float, last_value: float) -> float:
-    if pd.isna(first_value) or pd.isna(last_value) or first_value == 0:
+def _safe_pct_change(current: float, baseline: float) -> float:
+    if pd.isna(current) or pd.isna(baseline) or baseline == 0:
         return 0.0
-    return ((last_value - first_value) / first_value) * 100
+    return ((current - baseline) / baseline) * 100
 
 
-def calculate_pct_change(current: float, baseline: float) -> float:
-    """Calculate percent change using (current - baseline) / baseline.
+def _read_csv_fallback(filename: str, parse_dates: Optional[List[str]] = None) -> pd.DataFrame:
+    candidate_paths = [
+        BASE_DIR / "data" / filename,
+        BASE_DIR / "datass" / filename,
+        BASE_DIR / filename,
+        BASE_DIR / "datasets" / filename,
+    ]
+    for path in candidate_paths:
+        if path.exists():
+            return pd.read_csv(path, parse_dates=parse_dates)
+    return pd.DataFrame()
 
-    Returns 0.0 if baseline is None, zero, or NaN to avoid division-by-zero
-    and NaN display in the dashboard.
-    """
-    if baseline is None or baseline == 0 or pd.isna(baseline):
-        return 0.0
-    if pd.isna(current):
-        return 0.0
+
+@st.cache_resource(show_spinner=False)
+def _bigquery_client() -> Optional[object]:
     try:
-        return ((current - baseline) / baseline) * 100
+        from google.cloud import bigquery
+
+        os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", str(BASE_DIR / "config" / "google_credentials.json"))
+        return bigquery.Client()
     except Exception:
-        return 0.0
+        return None
 
 
-def build_yearly_view(df: pd.DataFrame, selected_region: str) -> pd.DataFrame:
-    region_df = df[df["region"] == selected_region].copy()
-    region_df = region_df[region_df["report_month"].dt.year >= 2006]
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_food_prices(_client=None) -> pd.DataFrame:
+    if _client is not None:
+        try:
+            query = f"""
+                SELECT
+                    date,
+                    admin1,
+                    market,
+                    category,
+                    commodity,
+                    unit,
+                    price,
+                    usdprice
+                FROM `{BQ_PROJECT}.{BQ_DATASET}.wfp_prices_raw`
+            """
+            df = _client.query(query).to_dataframe()
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            for col in ["admin1", "market", "category", "commodity", "unit"]:
+                if col in df.columns:
+                    df[col] = df[col].astype("category")
+            return df
+        except Exception:
+            pass
 
-    yearly_df = (
-        region_df.assign(report_year=region_df["report_month"].dt.year)
-        .groupby("report_year", as_index=False)
-        .agg(
-            kamote_price=("avg_price_php", "mean"),
-            affordability_index=("affordability_index", "mean"),
-            net_income_per_capita=("net_income_per_capita", "mean"),
-            poverty_rate_pct=("poverty_rate_pct", "mean"),
-            gini_index=("gini_index", "mean"),
-            slum_pop_pct=("slum_pop_pct", "mean"),
+    df = _read_csv_fallback("raw_wfp_food_prices.csv", parse_dates=["date"])
+    if not df.empty:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    return df
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_poverty(_client=None) -> pd.DataFrame:
+    if _client is not None:
+        try:
+            query = f"SELECT * FROM `{BQ_PROJECT}.{BQ_DATASET}.poverty_phl_raw`"
+            return _client.query(query).to_dataframe()
+        except Exception:
+            pass
+    return _read_csv_fallback("poverty_phl.csv")
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_economic(_client=None) -> pd.DataFrame:
+    if _client is not None:
+        try:
+            query = f"SELECT * FROM `{BQ_PROJECT}.{BQ_DATASET}.economy_growth_raw`"
+            return _client.query(query).to_dataframe()
+        except Exception:
+            pass
+    return _read_csv_fallback("economy-and-growth_phl.csv")
+
+
+def overview_page(_client=None):
+    st.title("PhilsPulse Overview")
+    st.caption("Clean snapshot of food prices, poverty indicators, and macro-economy trends.")
+
+    food_df = load_food_prices(_client)
+    pov_df = load_poverty(_client)
+    econ_df = load_economic(_client)
+
+    metric_cols = st.columns(4)
+    with metric_cols[0]:
+        st.metric("Food Rows", f"{len(food_df):,}")
+    with metric_cols[1]:
+        st.metric("Poverty Rows", f"{len(pov_df):,}")
+    with metric_cols[2]:
+        st.metric("Economy Rows", f"{len(econ_df):,}")
+    with metric_cols[3]:
+        if not food_df.empty and "date" in food_df.columns:
+            st.metric("Latest Food Date", str(food_df["date"].max().date()))
+        else:
+            st.metric("Latest Food Date", "N/A")
+
+    if not food_df.empty and {"date", "commodity", "price"}.issubset(food_df.columns):
+        st.markdown("### Monthly Food Price Trend (Top Commodities)")
+        top_commodities = list(food_df["commodity"].value_counts().head(5).index)
+        quick = food_df[food_df["commodity"].isin(top_commodities)].copy()
+        quick = (
+            quick.groupby([pd.Grouper(key="date", freq="MS"), "commodity"], observed=True)["price"]
+            .median()
+            .reset_index()
+            .sort_values("date")
         )
-        .sort_values("report_year")
-    )
+        fig = px.line(
+            quick,
+            x="date",
+            y="price",
+            color="commodity",
+            labels={"date": "Month", "price": "Median Price (PHP)"},
+        )
+        fig.update_traces(line=dict(width=2))
+        st.plotly_chart(fig, use_container_width=True)
 
-    return yearly_df
-
-
-def render_hero() -> None:
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="section-label">Kamote paradox dashboard</div>
-            <h1>PhilsPulse: The Kamote Paradox Solved</h1>
-            <p>Track how kamote prices, income, and poverty move together across Philippine regions.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_sidebar(df: pd.DataFrame) -> tuple[str, str]:
-    st.sidebar.header("Explore")
-    st.sidebar.caption("Use the controls below to compare regions and switch the left axis metric.")
-
-    region = st.sidebar.selectbox(
-        "Select Region",
-        options=sorted(df["region"].dropna().unique()),
-    )
-    metric_choice = st.sidebar.selectbox(
-        "Left-axis metric",
-        options=["Nominal Price", "Affordability Index"],
-        help="Nominal price shows kamote price in pesos; affordability shows how much income buys per peso of kamote.",
-    )
-    return region, metric_choice
+    with st.expander("Preview data samples"):
+        tabs = st.tabs(["Food", "Poverty", "Economy"])
+        with tabs[0]:
+            if food_df.empty:
+                st.info("No food data available.")
+            else:
+                cols = [c for c in ["date", "admin1", "market", "commodity", "price"] if c in food_df.columns]
+                st.dataframe(food_df[cols].sort_values("date", ascending=False).head(12), use_container_width=True)
+        with tabs[1]:
+            if pov_df.empty:
+                st.info("No poverty data available.")
+            else:
+                st.dataframe(pov_df.head(12), use_container_width=True)
+        with tabs[2]:
+            if econ_df.empty:
+                st.info("No economy data available.")
+            else:
+                st.dataframe(econ_df.head(12), use_container_width=True)
 
 
-def render_metrics(yearly_df: pd.DataFrame) -> None:
-    if yearly_df.empty:
-        st.warning("No data found for this region and time window.")
+def food_page(_client=None):
+    st.title("Food Prices")
+    st.caption("Faster, cleaner monthly trends with optional smoothing and market ranking.")
+
+    food_df = load_food_prices(_client)
+    if food_df.empty:
+        st.warning("No food price data available.")
         return
 
-    import numpy as np
-    start = yearly_df.iloc[0]
-    end = yearly_df.iloc[-1]
+    required = {"date", "commodity", "price"}
+    if not required.issubset(food_df.columns):
+        st.error("Food dataset is missing required columns: date, commodity, price.")
+        return
 
-    def safe_display(val, fmt, na_val="N/A"):
-        if pd.isna(val) or (isinstance(val, float) and not np.isfinite(val)):
-            return na_val
-        try:
-            return fmt.format(val)
-        except Exception:
-            return na_val
+    food_df = food_df.dropna(subset=["date", "commodity", "price"]).copy()
+    food_df["price"] = pd.to_numeric(food_df["price"], errors="coerce")
+    food_df = food_df.dropna(subset=["price"])
 
-    kamote_price_increase = calculate_pct_change(end["kamote_price"], start["kamote_price"])
-    poverty_decrease = calculate_pct_change(end["poverty_rate_pct"], start["poverty_rate_pct"])
-    affordability_shift_ratio = (end["affordability_index"] / start["affordability_index"]) if start["affordability_index"] else np.nan
+    st.sidebar.subheader("Food Filters")
+    commodities = sorted(food_df["commodity"].astype(str).unique())
+    default_commodities = list(food_df["commodity"].value_counts().head(5).index)
+    selected_commodities = st.sidebar.multiselect("Commodities", commodities, default=default_commodities)
+    if not selected_commodities:
+        st.info("Select at least one commodity.")
+        return
 
-    metric_cols = st.columns(3)
+    min_date = food_df["date"].min().date()
+    max_date = food_df["date"].max().date()
+    date_start, date_end = st.sidebar.date_input("Date Range", value=(min_date, max_date))
 
-    with metric_cols[0]:
-        st.metric(
-            "Total % Increase in Kamote Price",
-            safe_display(kamote_price_increase, "{:+.1f}%", na_val="0%"),
-            delta=f"{safe_display(end['kamote_price'], '₱{:.2f}', 'N/A')} vs {safe_display(start['kamote_price'], '₱{:.2f}', 'N/A')}",
-            delta_color="inverse",
-        )
+    agg_method = st.sidebar.radio("Monthly aggregation", ["Median", "Mean"], index=0, horizontal=True)
+    smoothing_window = st.sidebar.slider("Rolling average (months)", 1, 12, 3)
 
-    with metric_cols[1]:
-        st.metric(
-            "Total % Decrease in Poverty Incidence",
-            safe_display(abs(poverty_decrease), "{:.1f}%", na_val="0%"),
-            delta=f"{safe_display(end['poverty_rate_pct'], '{:.1f}%', 'N/A')} today vs {safe_display(start['poverty_rate_pct'], '{:.1f}%', 'N/A')} in 2006",
-        )
+    filtered = food_df[
+        (food_df["commodity"].isin(selected_commodities))
+        & (food_df["date"] >= pd.to_datetime(date_start))
+        & (food_df["date"] <= pd.to_datetime(date_end))
+    ].copy()
+    if filtered.empty:
+        st.warning("No food data for selected filters.")
+        return
 
-    with metric_cols[2]:
-        if pd.isna(affordability_shift_ratio) or not np.isfinite(affordability_shift_ratio) or affordability_shift_ratio == 0:
-            shift_delta = "No baseline"
-            aff_val = "N/A"
-        else:
-            shift_delta = f"{((affordability_shift_ratio - 1) * 100):+.1f}% vs 2006"
-            aff_val = f"{affordability_shift_ratio:.2f}x"
-        st.metric(
-            "Affordability Shift",
-            aff_val,
-            delta=shift_delta,
-        )
-
-
-def render_dual_axis_chart(yearly_df: pd.DataFrame, selected_region: str, metric_choice: str) -> None:
-    st.subheader("Dual-Axis Kamote Paradox")
-    st.caption("Kamote price is on the left axis. Net National Income is on the right axis.")
-
-    left_metric = "kamote_price" if metric_choice == "Nominal Price" else "affordability_index"
-    left_title = "Kamote Price (PHP)" if metric_choice == "Nominal Price" else "Affordability Index"
-    left_name = "Kamote Price" if metric_choice == "Nominal Price" else "Affordability Index"
-    left_color = "#f59e0b" if metric_choice == "Nominal Price" else "#38bdf8"
-
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-    fig.add_trace(
-        go.Scatter(
-            x=yearly_df["report_year"],
-            y=yearly_df[left_metric],
-            name=left_name,
-            mode="lines+markers",
-            line=dict(color=left_color, width=3),
-            marker=dict(size=8),
-            hovertemplate="Year %{x}<br>%{y:.2f}<extra></extra>",
-        ),
-        secondary_y=False,
+    group = filtered.groupby([pd.Grouper(key="date", freq="MS"), "commodity"], observed=True)["price"]
+    if agg_method == "Median":
+        monthly = group.median().reset_index()
+    else:
+        monthly = group.mean().reset_index()
+    monthly = monthly.sort_values(["commodity", "date"])
+    monthly["smoothed_price"] = monthly.groupby("commodity")["price"].transform(
+        lambda s: s.rolling(window=smoothing_window, min_periods=1).mean()
     )
 
-    fig.add_trace(
-        go.Scatter(
-            x=yearly_df["report_year"],
-            y=yearly_df["net_income_per_capita"],
-            name="Net National Income",
-            mode="lines+markers",
-            line=dict(color="#22c55e", width=3),
-            marker=dict(size=8),
-            hovertemplate="Year %{x}<br>₱%{y:,.2f}<extra></extra>",
-        ),
-        secondary_y=True,
+    latest_month = monthly["date"].max()
+    latest_avg = monthly[monthly["date"] == latest_month]["smoothed_price"].mean()
+    one_year_ago = latest_month - pd.DateOffset(years=1)
+    baseline_rows = monthly[monthly["date"] == one_year_ago]
+    baseline_avg = baseline_rows["smoothed_price"].mean() if not baseline_rows.empty else 0
+    yoy_change = _safe_pct_change(latest_avg, baseline_avg)
+
+    kpi_cols = st.columns(3)
+    with kpi_cols[0]:
+        st.metric("Latest Avg Price", f"PHP {latest_avg:,.2f}")
+    with kpi_cols[1]:
+        st.metric("Year-over-Year", f"{yoy_change:+.1f}%")
+    with kpi_cols[2]:
+        st.metric("Observations", f"{len(filtered):,}")
+
+    line_fig = px.line(
+        monthly,
+        x="date",
+        y="smoothed_price",
+        color="commodity",
+        markers=True,
+        labels={"date": "Month", "smoothed_price": f"{agg_method} Price (PHP)"},
+        title="Monthly Commodity Price Trends",
     )
+    line_fig.update_traces(line=dict(width=2))
+    st.plotly_chart(line_fig, use_container_width=True)
 
-    fig.update_layout(
-        template="plotly_dark",
-        height=560,
-        margin=dict(l=20, r=20, t=110, b=20),
-        hovermode="x unified",
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.06,
-            xanchor="left",
-            x=0,
-            font=dict(size=11),
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        title=dict(text=f"{selected_region}: Kamote price vs net income", x=0.02),
-    )
-    fig.update_xaxes(title_text="Year")
-    fig.update_yaxes(title_text=left_title, secondary_y=False)
-    fig.update_yaxes(title_text="Net National Income (PHP)", secondary_y=True)
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def render_correlation_scatter(correlation_df: pd.DataFrame) -> None:
-    st.subheader("Income vs Poverty")
-    st.caption("The regression line highlights the downward relationship between income and poverty incidence.")
-
-    scatter_df = correlation_df.dropna(subset=["net_income_per_capita", "poverty_rate_pct"]).copy()
-    scatter_df = scatter_df[scatter_df["report_year"] >= 2006]
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=scatter_df["net_income_per_capita"],
-            y=scatter_df["poverty_rate_pct"],
-            mode="markers",
-            name="Yearly observations",
-            marker=dict(
-                size=12,
-                color=scatter_df["report_year"],
-                colorscale="Viridis",
-                showscale=True,
-                colorbar=dict(title="Year"),
-                line=dict(width=0.6, color="rgba(255,255,255,0.35)"),
-            ),
-            text=scatter_df["report_year"],
-            hovertemplate="Year %{text}<br>Income ₱%{x:,.2f}<br>Poverty %{y:.2f}%<extra></extra>",
+    lower_col, right_col = st.columns([1.3, 1])
+    with lower_col:
+        box_fig = px.box(
+            filtered,
+            x="commodity",
+            y="price",
+            color="commodity",
+            points=False,
+            title="Price Distribution by Commodity",
+            labels={"price": "Price (PHP)", "commodity": "Commodity"},
         )
-    )
+        box_fig.update_layout(showlegend=False)
+        st.plotly_chart(box_fig, use_container_width=True)
 
-    if len(scatter_df) >= 2:
-        x_values = scatter_df["net_income_per_capita"].astype(float).to_numpy()
-        y_values = scatter_df["poverty_rate_pct"].astype(float).to_numpy()
-        slope, intercept = np.polyfit(x_values, y_values, 1)
-        x_line = np.linspace(x_values.min(), x_values.max(), 100)
-        y_line = slope * x_line + intercept
-
-        fig.add_trace(
-            go.Scatter(
-                x=x_line,
-                y=y_line,
-                mode="lines",
-                name="Regression line",
-                line=dict(color="#f97316", width=3, dash="dash"),
-                hoverinfo="skip",
+    with right_col:
+        st.markdown("### Top Markets (Avg Price)")
+        if "market" in filtered.columns:
+            market_rank = (
+                filtered.groupby("market", observed=True)["price"]
+                .mean()
+                .reset_index()
+                .sort_values("price", ascending=False)
+                .head(12)
             )
-        )
+            market_rank = market_rank.rename(columns={"market": "Market", "price": "Avg Price (PHP)"})
+            st.dataframe(market_rank, use_container_width=True, height=360)
+        else:
+            st.info("Market column not available in data source.")
 
-    fig.update_layout(
-        template="plotly_dark",
-        height=500,
-        margin=dict(l=20, r=20, t=80, b=20),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.03,
-            xanchor="left",
-            x=0,
-            font=dict(size=11),
-            bgcolor="rgba(0,0,0,0)",
-        ),
-        title=dict(text="Net income vs poverty incidence", x=0.02),
-        xaxis_title="Net National Income (PHP)",
-        yaxis_title="Poverty Incidence (%)",
+    csv_bytes = filtered.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Download filtered food data",
+        data=csv_bytes,
+        file_name="food_filtered.csv",
+        mime="text/csv",
     )
 
+
+def poverty_page(_client=None):
+    st.title("Poverty")
+    st.caption("Indicator trends and latest snapshot with clean filtering.")
+
+    pov_df = load_poverty(_client)
+    if pov_df.empty:
+        st.warning("No poverty data available.")
+        return
+
+    year_col = _pick_column(pov_df, ["year", "report_year"], fallback_index=2)
+    value_col = _pick_column(pov_df, ["value", "poverty_rate_pct", "poverty_rate"])
+    indicator_col = _pick_column(pov_df, ["indicator_name", "indicator", "indicator_code"], fallback_index=3)
+
+    if year_col is None or value_col is None or indicator_col is None:
+        st.error("Poverty dataset does not have enough structured columns for charting.")
+        st.dataframe(pov_df.head(20), use_container_width=True)
+        return
+
+    df = pov_df[[year_col, indicator_col, value_col]].copy()
+    df[year_col] = pd.to_numeric(df[year_col], errors="coerce")
+    df[value_col] = pd.to_numeric(df[value_col], errors="coerce")
+    df = df.dropna(subset=[year_col, value_col, indicator_col])
+
+    years = sorted(df[year_col].astype(int).unique().tolist())
+    if not years:
+        st.warning("No valid poverty years found.")
+        return
+
+    st.sidebar.subheader("Poverty Filters")
+    year_min, year_max = st.sidebar.select_slider("Year Range", options=years, value=(years[0], years[-1]))
+    indicator_options = sorted(df[indicator_col].astype(str).unique().tolist())
+    default_indicators = indicator_options[:4]
+    selected_indicators = st.sidebar.multiselect("Indicators", indicator_options, default=default_indicators)
+    if not selected_indicators:
+        st.info("Select at least one indicator.")
+        return
+
+    filtered = df[
+        (df[year_col] >= year_min)
+        & (df[year_col] <= year_max)
+        & (df[indicator_col].isin(selected_indicators))
+    ]
+    if filtered.empty:
+        st.warning("No poverty data for selected filters.")
+        return
+
+    trend = (
+        filtered.groupby([year_col, indicator_col], observed=True)[value_col]
+        .mean()
+        .reset_index()
+        .sort_values(year_col)
+    )
+    trend_fig = px.line(
+        trend,
+        x=year_col,
+        y=value_col,
+        color=indicator_col,
+        markers=True,
+        labels={year_col: "Year", value_col: "Value"},
+        title="Poverty Indicator Trends",
+    )
+    trend_fig.update_traces(line=dict(width=2))
+    st.plotly_chart(trend_fig, use_container_width=True)
+
+    latest_year = int(trend[year_col].max())
+    latest = trend[trend[year_col] == latest_year].sort_values(value_col, ascending=False)
+    bar_fig = px.bar(
+        latest.head(12),
+        x=value_col,
+        y=indicator_col,
+        orientation="h",
+        labels={value_col: "Latest Value", indicator_col: "Indicator"},
+        title=f"Latest Indicator Snapshot ({latest_year})",
+    )
+    st.plotly_chart(bar_fig, use_container_width=True)
+
+
+def economy_page(_client=None):
+    st.title("Economic Growth")
+    st.caption("Multi-metric trend view with growth context and less noise.")
+
+    econ_df = load_economic(_client)
+    if econ_df.empty:
+        st.warning("No economic growth data available.")
+        return
+
+    year_col = _pick_column(econ_df, ["year", "report_year", "date"], fallback_index=0)
+    if year_col is None:
+        st.error("Could not infer year column for economy data.")
+        return
+
+    df = econ_df.copy()
+    df[year_col] = pd.to_numeric(df[year_col], errors="coerce")
+    df = df.dropna(subset=[year_col])
+
+    numeric_cols = [c for c in df.select_dtypes(include="number").columns if c != year_col]
+    if not numeric_cols:
+        st.error("No numeric economic metrics available.")
+        return
+
+    st.sidebar.subheader("Economy Filters")
+    selected_metric = st.sidebar.selectbox("Primary Metric", numeric_cols, index=0)
+    compare_metric = st.sidebar.selectbox("Compare Metric (optional)", ["None"] + numeric_cols, index=0)
+
+    trend_cols = [selected_metric] + ([compare_metric] if compare_metric != "None" and compare_metric != selected_metric else [])
+    trend_df = df[[year_col] + trend_cols].sort_values(year_col)
+
+    chart_df = trend_df.melt(
+        id_vars=[year_col],
+        value_vars=trend_cols,
+        var_name="metric",
+        value_name="metric_value",
+    )
+    fig = px.line(
+        chart_df,
+        x=year_col,
+        y="metric_value",
+        color="metric",
+        markers=True,
+        labels={year_col: "Year", "metric_value": "Value", "metric": "Metric"},
+        title="Economic Metric Trends",
+    )
+    fig.update_traces(line=dict(width=2))
     st.plotly_chart(fig, use_container_width=True)
 
-
-def render_raw_preview(yearly_df: pd.DataFrame, correlation_df: pd.DataFrame) -> None:
-    st.subheader("Raw Data Preview")
-    tabs = st.tabs(["Master table", "Correlation table"])
-
-    with tabs[0]:
-        st.dataframe(
-            yearly_df[
-                [
-                    "report_year",
-                    "kamote_price",
-                    "affordability_index",
-                    "net_income_per_capita",
-                    "poverty_rate_pct",
-                    "slum_pop_pct",
-                ]
-            ],
-            use_container_width=True,
-        )
-
-    with tabs[1]:
-        st.dataframe(correlation_df, use_container_width=True)
+    primary = trend_df[[year_col, selected_metric]].dropna()
+    if not primary.empty:
+        latest_val = primary[selected_metric].iloc[-1]
+        first_val = primary[selected_metric].iloc[0]
+        growth_pct = _safe_pct_change(latest_val, first_val)
+        kpi_cols = st.columns(3)
+        with kpi_cols[0]:
+            st.metric("Latest", f"{latest_val:,.2f}")
+        with kpi_cols[1]:
+            st.metric("Since First Year", f"{growth_pct:+.1f}%")
+        with kpi_cols[2]:
+            st.metric("Years Covered", f"{primary[year_col].nunique()}")
 
 
-def render_footer() -> None:
-    github_url = "https://github.com/eduardodfran/ph-economic-pulse-tracker"
-    lineage_graph = (BASE_DIR / "ph_pulse_dbt" / "target" / "index.html").as_uri()
-    st.markdown(
-        f"""
-        <div class="footer">
-            <strong>Links:</strong>
-            <a href="{github_url}" target="_blank">GitHub</a>
-            &nbsp;|&nbsp;
-            <a href="{lineage_graph}" target="_blank">dbt Lineage Graph</a>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def cross_dataset_page(_client=None):
+    st.title("Cross-dataset Analysis")
+    st.caption("Compare food prices, poverty, and economy with clearer options for single or multiple food commodities.")
+
+    food_df = load_food_prices(_client)
+    pov_df = load_poverty(_client)
+    econ_df = load_economic(_client)
+
+    if food_df.empty or pov_df.empty or econ_df.empty:
+        st.warning("Cross analysis requires all three datasets.")
+        return
+
+    if not {"date", "commodity", "price"}.issubset(food_df.columns):
+        st.warning("Food dataset missing required columns for cross analysis.")
+        return
+
+    pov_year_col = _pick_column(pov_df, ["year", "report_year"], fallback_index=2)
+    pov_value_col = _pick_column(pov_df, ["value", "poverty_rate_pct", "poverty_rate"])
+    pov_indicator_col = _pick_column(pov_df, ["indicator_name", "indicator", "indicator_code"], fallback_index=3)
+    econ_year_col = _pick_column(econ_df, ["year", "report_year", "date"], fallback_index=0)
+
+    if None in [pov_year_col, pov_value_col, pov_indicator_col, econ_year_col]:
+        st.warning("Could not infer columns for poverty/economy cross-analysis.")
+        return
+
+    food_df = food_df.copy()
+    food_df["date"] = pd.to_datetime(food_df["date"], errors="coerce")
+    food_df["year"] = food_df["date"].dt.year
+    food_df["price"] = pd.to_numeric(food_df["price"], errors="coerce")
+    food_df = food_df.dropna(subset=["year", "price", "commodity"])
+
+    pov = pov_df[[pov_year_col, pov_indicator_col, pov_value_col]].copy()
+    pov[pov_year_col] = pd.to_numeric(pov[pov_year_col], errors="coerce")
+    pov[pov_value_col] = pd.to_numeric(pov[pov_value_col], errors="coerce")
+    pov = pov.dropna(subset=[pov_year_col, pov_value_col, pov_indicator_col])
+
+    econ = econ_df.copy()
+    econ[econ_year_col] = pd.to_numeric(econ[econ_year_col], errors="coerce")
+    econ = econ.dropna(subset=[econ_year_col])
+    econ_numeric_cols = [c for c in econ.select_dtypes(include="number").columns if c != econ_year_col]
+    if not econ_numeric_cols:
+        st.warning("No numeric economy metric available for cross analysis.")
+        return
+
+    st.sidebar.subheader("Cross-analysis Filters")
+    food_mode = st.sidebar.radio(
+        "Food mode",
+        [
+            "Single commodity",
+            "Multiple commodities average",
+            "Multiple commodities separate",
+        ],
+        index=1,
+    )
+    food_agg = st.sidebar.selectbox("Food aggregation", ["Median", "Mean"], index=0)
+
+    commodity_options = sorted(food_df["commodity"].astype(str).unique().tolist())
+    default_foods = commodity_options[:3]
+
+    if food_mode == "Single commodity":
+        single_food = st.sidebar.selectbox("Food commodity", commodity_options)
+        selected_foods = [single_food]
+    else:
+        selected_foods = st.sidebar.multiselect("Food commodities", commodity_options, default=default_foods)
+        if not selected_foods:
+            st.info("Select at least one food commodity.")
+            return
+
+    poverty_choice = st.sidebar.selectbox("Poverty indicator", sorted(pov[pov_indicator_col].astype(str).unique().tolist()))
+    econ_choice = st.sidebar.selectbox("Economy metric", econ_numeric_cols)
+    value_mode = st.sidebar.radio("Display mode", ["Indexed (Base=100)", "Raw values"], index=0)
+    year_alignment = st.sidebar.radio(
+        "Year alignment",
+        ["Use full timeline", "Only overlapping years"],
+        index=0,
+        help="Full timeline keeps all years from selected series and shows gaps when one series has missing years.",
     )
 
+    food_filtered = food_df[food_df["commodity"].isin(selected_foods)].copy()
+    food_grouped = food_filtered.groupby(["year", "commodity"], observed=True)["price"]
+    if food_agg == "Median":
+        food_grouped = food_grouped.median().reset_index(name="food_price")
+    else:
+        food_grouped = food_grouped.mean().reset_index(name="food_price")
 
-def main() -> None:
-    render_hero()
+    food_series_names = []
+    if food_mode == "Single commodity":
+        food_col_name = f"Food: {selected_foods[0]}"
+        food_series = (
+            food_grouped[food_grouped["commodity"] == selected_foods[0]][["year", "food_price"]]
+            .rename(columns={"food_price": food_col_name})
+            .sort_values("year")
+        )
+        food_series_names = [food_col_name]
+    elif food_mode == "Multiple commodities average":
+        food_col_name = f"Food average ({len(selected_foods)} items)"
+        food_series = (
+            food_grouped.groupby("year", observed=True)["food_price"]
+            .mean()
+            .reset_index()
+            .rename(columns={"food_price": food_col_name})
+            .sort_values("year")
+        )
+        food_series_names = [food_col_name]
+    else:
+        if len(selected_foods) > 6:
+            selected_foods = selected_foods[:6]
+            st.info("Showing the first 6 selected commodities for readability.")
+        food_series = (
+            food_grouped[food_grouped["commodity"].isin(selected_foods)]
+            .pivot_table(index="year", columns="commodity", values="food_price", aggfunc="mean")
+            .reset_index()
+            .sort_values("year")
+        )
+        rename_map = {c: f"Food: {c}" for c in food_series.columns if c != "year"}
+        food_series = food_series.rename(columns=rename_map)
+        food_series_names = [c for c in food_series.columns if c != "year"]
 
-    master_df = get_master_data()
-    correlation_df = get_correlation_data()
+    pov_series = (
+        pov[pov[pov_indicator_col] == poverty_choice]
+        .groupby(pov_year_col, observed=True)[pov_value_col]
+        .mean()
+        .reset_index()
+        .rename(columns={pov_year_col: "year", pov_value_col: "poverty_value"})
+    )
+    econ_series = (
+        econ.groupby(econ_year_col, observed=True)[econ_choice]
+        .mean()
+        .reset_index()
+        .rename(columns={econ_year_col: "year", econ_choice: "economy_value"})
+    )
 
-    selected_region, metric_choice = render_sidebar(master_df)
-    regional_df = master_df[master_df["region"] == selected_region].copy()
-    yearly_df = build_yearly_view(regional_df, selected_region)
+    poverty_series_name = f"Poverty: {poverty_choice}"
+    economy_series_name = f"Economy: {econ_choice}"
+    pov_series = pov_series.rename(columns={"poverty_value": poverty_series_name})
+    econ_series = econ_series.rename(columns={"economy_value": economy_series_name})
 
-    if yearly_df.empty:
-        st.warning("No kamote data found for this region in the selected time window.")
-        st.stop()
+    join_type = "outer" if year_alignment == "Use full timeline" else "inner"
+    merged = food_series.merge(pov_series, on="year", how=join_type).merge(econ_series, on="year", how=join_type)
+    merged = merged.sort_values("year")
+    if merged.empty:
+        st.warning("No overlapping years across selected series.")
+        return
 
-    render_metrics(yearly_df)
-    render_dual_axis_chart(yearly_df, selected_region, metric_choice)
+    year_options = sorted(merged["year"].astype(int).unique().tolist())
+    if len(year_options) >= 2:
+        year_start, year_end = st.sidebar.select_slider("Year range", options=year_options, value=(year_options[0], year_options[-1]))
+        merged = merged[(merged["year"] >= year_start) & (merged["year"] <= year_end)]
 
-    bottom_left, bottom_right = st.columns([1.25, 1])
-    with bottom_left:
-        render_correlation_scatter(correlation_df)
-    with bottom_right:
-        render_raw_preview(yearly_df, correlation_df)
+    series_cols = [c for c in merged.columns if c != "year"]
+    if not series_cols:
+        st.warning("No series available after filtering.")
+        return
 
-    render_footer()
+    plot_df = merged.copy()
+    if value_mode == "Indexed (Base=100)":
+        for col in series_cols:
+            first_valid = plot_df[col].dropna()
+            if first_valid.empty:
+                plot_df[col] = pd.NA
+            else:
+                base = first_valid.iloc[0]
+                plot_df[col] = 100 if base == 0 else (plot_df[col] / base) * 100
+
+    long_df = plot_df.melt(
+        id_vars=["year"],
+        value_vars=series_cols,
+        var_name="series",
+        value_name="series_value",
+    )
+
+    idx_fig = px.line(
+        long_df,
+        x="year",
+        y="series_value",
+        color="series",
+        markers=True,
+        labels={
+            "series_value": "Index (Base=100)" if value_mode == "Indexed (Base=100)" else "Value",
+            "year": "Year",
+        },
+        title="Cross-dataset Trend Comparison",
+    )
+    idx_fig.update_traces(line=dict(width=2.5))
+    st.plotly_chart(idx_fig, use_container_width=True)
+
+    # Correlation uses complete-case rows to avoid misleading values from missing years.
+    corr_input = merged[["year"] + series_cols].dropna(subset=series_cols, how="any")
+    if len(corr_input) < 3:
+        st.info(
+            "Correlation is based on very few overlapping years. "
+            "Try switching to 'Only overlapping years' or selecting a poverty indicator with more years."
+        )
+    if len(corr_input) >= 2:
+        corr = corr_input[series_cols].corr(numeric_only=True)
+        corr_fig = px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu", zmin=-1, zmax=1, title="Correlation Matrix")
+        st.plotly_chart(corr_fig, use_container_width=True)
+    else:
+        corr = pd.DataFrame()
+        st.warning("Not enough overlapping rows to compute correlation.")
+
+    if (not corr.empty) and food_series_names and poverty_series_name in corr.columns and economy_series_name in corr.columns:
+        summary_rows = []
+        for name in food_series_names:
+            if name in corr.columns:
+                summary_rows.append(
+                    {
+                        "food_series": name,
+                        "corr_with_poverty": round(float(corr.loc[name, poverty_series_name]), 3),
+                        "corr_with_economy": round(float(corr.loc[name, economy_series_name]), 3),
+                    }
+                )
+        if summary_rows:
+            st.markdown("### Food Correlation Summary")
+            st.dataframe(pd.DataFrame(summary_rows), use_container_width=True)
+
+    if series_cols:
+        availability = []
+        for col in series_cols:
+            col_non_null = merged[["year", col]].dropna()
+            if not col_non_null.empty:
+                availability.append(
+                    {
+                        "series": col,
+                        "start_year": int(col_non_null["year"].min()),
+                        "end_year": int(col_non_null["year"].max()),
+                        "points": int(len(col_non_null)),
+                    }
+                )
+        if availability:
+            st.markdown("### Series Availability")
+            st.dataframe(pd.DataFrame(availability), use_container_width=True)
+
+    with st.expander("Show comparison dataset"):
+        st.dataframe(merged, use_container_width=True)
+
+
+def main():
+    st.sidebar.title("PhilsPulse")
+    page = st.sidebar.radio(
+        "Page",
+        ["Overview", "Food Prices", "Poverty", "Economic Growth", "Cross-dataset"],
+    )
+
+    client = _bigquery_client()
+
+    if page == "Overview":
+        overview_page(client)
+    elif page == "Food Prices":
+        food_page(client)
+    elif page == "Poverty":
+        poverty_page(client)
+    elif page == "Economic Growth":
+        economy_page(client)
+    else:
+        cross_dataset_page(client)
 
 
 if __name__ == "__main__":
