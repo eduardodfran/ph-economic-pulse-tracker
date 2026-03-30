@@ -71,7 +71,7 @@ Linux/macOS:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r pipeline-requirements.txt
 ```
 
 Windows PowerShell:
@@ -79,7 +79,7 @@ Windows PowerShell:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r pipeline-requirements.txt
 ```
 
 ### 3. Configure GCP authentication and local env vars
