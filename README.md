@@ -22,13 +22,13 @@ I implemented partitioning by year on the `fct_food_prices` table (partitioned b
 
 ```mermaid
 flowchart LR
-   WFP[WFP Food Prices (PH)] --> Airflow[Airflow DAG]
-   ECON[WB Economy and Growth (PH)] --> Airflow
-   POV[WB Poverty Indicators (PH)] --> Airflow
-    Airflow --> GCS[Google Cloud Storage]
-    GCS --> BQ[BigQuery]
-    BQ --> dbt[dbt]
-    dbt --> Streamlit[Streamlit Dashboard]
+   WFP["WFP Food Prices - PH"] --> AIRFLOW["Airflow DAG"]
+   ECON["WB Economy and Growth - PH"] --> AIRFLOW
+   POV["WB Poverty Indicators - PH"] --> AIRFLOW
+   AIRFLOW --> GCS["Google Cloud Storage"]
+   GCS --> BQ["BigQuery"]
+   BQ --> DBT["dbt"]
+   DBT --> STREAMLIT["Streamlit Dashboard"]
 ```
 
 ## Batch Ingestion Logic
@@ -64,7 +64,7 @@ To run the Airflow DAGs in this project, reviewers must complete the following s
 
 ### 2. Airflow Variables
 
-![alt text](image.png)
+![alt text](images/airflow-variables.png)
 
 PLACEHOLDER NOTE: Replace the placeholder path above with your actual Airflow Variables screenshot path.
 
@@ -154,7 +154,6 @@ terraform plan
 terraform apply -auto-approve
 ```
 
-![PLACEHOLDER - Terraform apply proof screenshot goes here](docs/screenshots/terraform-apply-proof.png)
 
 5. Start services (Airflow):
 
@@ -163,7 +162,7 @@ docker compose up -d
 # visit http://localhost:8080 to view Airflow and trigger DAGs
 ```
 
-![PLACEHOLDER - Airflow DAG graph screenshot goes here](docs/screenshots/airflow-dag-graph.png)
+![Airflow DAG graph](images/airflow-diagram.png)
 
 6. Configure Airflow variables
 
@@ -178,7 +177,6 @@ docker compose exec airflow-webserver airflow variables set ph_bucket_name ph-ec
 
 Use the same project/dataset names you provisioned with Terraform (or update the Terraform variables and re-run `terraform apply`).
 
-![PLACEHOLDER - Airflow successful DAG run logs screenshot goes here](docs/screenshots/airflow-successful-run-logs.png)
 
 7. Run dbt (local development using seeds):
 
@@ -189,7 +187,7 @@ dbt seed --profiles-dir $(DBT_PROFILES_DIR)
 dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
 ```
 
-![PLACEHOLDER - dbt build output screenshot goes here](docs/screenshots/dbt-build-output.png)
+![dbt build output](images/dbt-run.png)
 
 8. Launch the Streamlit dashboard:
 
@@ -197,8 +195,12 @@ dbt build --profiles-dir $(DBT_PROFILES_DIR) --vars "use_seed: true"
 streamlit run app.py
 ```
 
-![PLACEHOLDER - Dashboard tile 1 (temporal) screenshot goes here](docs/screenshots/dashboard-tile-temporal.png)
-![PLACEHOLDER - Dashboard tile 2 (categorical-regional) screenshot goes here](docs/screenshots/dashboard-tile-categorical.png)
+![alt text](images/db-overview.png)
+![alt text](images/db-food-prices.png)
+![alt text](images/db-food-prices-2.png)
+![alt text](images/db-poverty.png)
+![alt text](images/db-economic.png)
+![alt text](images/db-cross.png)
 
 Make shortcuts
 
@@ -246,6 +248,3 @@ Insert your BigQuery partition/clustering proof screenshot here:
 
 ![PLACEHOLDER - BigQuery partition and clustering metadata screenshot goes here](docs/screenshots/bigquery-partition-cluster-metadata.png)
 
-## Results
-
-PLACEHOLDER NOTE: This section can keep final polished screenshots after you replace the placeholders above.

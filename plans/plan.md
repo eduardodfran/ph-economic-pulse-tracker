@@ -52,8 +52,3 @@ Deliver a batch-first, reproducible, Windows-friendly modern data stack project 
 2. Region key harmonization: align province/region taxonomies across datasets early to avoid late-stage dashboard inconsistencies; recommended to maintain a small conformed dimension table.
 3. Cost controls: enforce partition filters in dashboard SQL and limit historical scan defaults to reduce BigQuery query costs during demos.
 
-## Phase 0 Deliverables
-
-- Scope decisions are locked for v1.
-- Rubric-to-evidence matrix is created at docs/rubric-evidence-matrix.md.
-- README now includes phase status and links to the scoring matrix.

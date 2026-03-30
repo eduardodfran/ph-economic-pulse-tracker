@@ -89,10 +89,5 @@ Deliver a full-score capstone project by demonstrating end-to-end capability in 
 - Dashboard: Screenshots of required tiles
 - Reproducibility: Setup guide validated by peer-style run-through
 
-## Submission Placeholders
 
-- PLACEHOLDER: Reviewer name and date of peer run-through
-- PLACEHOLDER: Screenshot path for DAG graph
-- PLACEHOLDER: Screenshot path for successful DAG run logs
-- PLACEHOLDER: Screenshot path for BigQuery metadata proof
-- PLACEHOLDER: Screenshot path for Streamlit required tiles
+
